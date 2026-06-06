@@ -38,6 +38,7 @@ class Scheduler:
         self.presets = {p.id: p for p in presets}
         self._ha = ha
         self._path = Path(path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         self._tz = tz
         self._now = now or (lambda: datetime.now(self._tz))
         self.armed: dict[str, datetime] = {}

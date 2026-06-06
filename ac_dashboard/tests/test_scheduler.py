@@ -168,3 +168,15 @@ async def test_fire_partial_failure_still_disarms(tmp_path):
     await s.check_due()  # must not raise
     assert s.armed == {}
     assert ("set_hvac_mode", "climate.b", "heat") in ha.calls
+
+
+def test_arm_creates_missing_state_directory(tmp_path):
+    s = Scheduler(
+        [PRESET],
+        FakeHAClient(),
+        tmp_path / "nested" / "dir" / "schedules.json",
+        TZ,
+        now=Clock(),
+    )
+    s.arm("evening_warmth", "2026-06-08", "18:00")
+    assert (tmp_path / "nested" / "dir" / "schedules.json").exists()
