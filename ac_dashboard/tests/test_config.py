@@ -95,3 +95,13 @@ def test_duplicate_preset_names_raise(tmp_path):
     )
     with pytest.raises(ValueError, match="Duplicate preset"):
         load_presets(f)
+
+
+def test_preset_id_strips_url_unsafe_characters():
+    p = Preset(name="Living/Dining #1!", entities=["climate.x"], mode="cool", time="08:00")
+    assert p.id == "livingdining_1"
+
+
+def test_preset_name_without_alphanumerics_raises():
+    with pytest.raises(ValueError, match="letter or digit"):
+        Preset(name="!!!", entities=["climate.x"], mode="cool", time="08:00")

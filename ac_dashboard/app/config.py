@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     schedules_path: str = "schedules.json"
 
 
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9_-]", "", name.lower().replace(" ", "_"))
+
+
 class Preset(BaseModel):
     name: str
     entities: list[str]
@@ -30,6 +34,8 @@ class Preset(BaseModel):
     def validate_preset(self):
         if not self.entities:
             raise ValueError("entities must be non-empty")
+        if not _slug(self.name):
+            raise ValueError("name must contain at least one letter or digit")
         if self.mode is None and self.temperature is None:
             raise ValueError("provide mode and/or temperature")
         if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", self.time):
@@ -38,7 +44,7 @@ class Preset(BaseModel):
 
     @property
     def id(self) -> str:
-        return self.name.lower().replace(" ", "_")
+        return _slug(self.name)
 
 
 def load_presets(path: str | Path = "presets.yaml") -> list[Preset]:
