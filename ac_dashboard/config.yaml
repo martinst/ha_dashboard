@@ -29,5 +29,5 @@ schema:
       entities:
         - str
   ssl: bool
-  certfile: str
-  keyfile: str
+  certfile: str?
+  keyfile: str?
