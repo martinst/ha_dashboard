@@ -1,8 +1,10 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, model_validator
 
 from app.config import Settings, load_groups
@@ -98,3 +100,7 @@ async def get_state(
 ):
     states = await ha.get_climate_states()
     return {"groups": build_groups(states, groups)}
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
