@@ -1,0 +1,10 @@
+# Copy to groups.yaml and edit. Entities not listed here still appear
+# under an "Ungrouped" section.
+groups:
+  - name: Upstairs
+    entities:
+      - climate.bedroom
+      - climate.office
+  - name: Downstairs
+    entities:
+      - climate.living_room

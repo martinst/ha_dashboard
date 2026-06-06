@@ -1,0 +1,13 @@
+[Unit]
+Description=Daikin AC Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/ha_dashboard
+ExecStart=/home/pi/ha_dashboard/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8088
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
