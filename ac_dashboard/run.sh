@@ -20,8 +20,14 @@ with open("/data/options.json") as f:
     options = json.load(f)
 with open("groups.yaml", "w") as f:
     yaml.safe_dump({"groups": options.get("groups", [])}, f)
+presets = options.get("presets", [])
+for p in presets:
+    t = p.get("time")
+    if isinstance(t, int) and 0 <= t < 1440:
+        # YAML 1.1 parses unquoted 18:00 as sexagesimal int 1080
+        p["time"] = f"{t // 60:02d}:{t % 60:02d}"
 with open("presets.yaml", "w") as f:
-    yaml.safe_dump({"presets": options.get("presets", [])}, f)
+    yaml.safe_dump({"presets": presets}, f)
 PY
 
 SSL_ARGS=""

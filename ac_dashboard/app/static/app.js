@@ -321,10 +321,16 @@ async function armPreset(p) {
 }
 
 async function cancelPreset(p) {
+  const previous = p.armed;
   p.armed = null;
   pendingSchedule[p.id] = Date.now() + PENDING_MS;
   render();
-  await post(`/api/schedule/${p.id}/cancel`, {});
+  const body = await post(`/api/schedule/${p.id}/cancel`, {});
+  if (!body) {
+    p.armed = previous;
+    delete pendingSchedule[p.id];
+    render();
+  }
 }
 
 // ---- helpers ----
