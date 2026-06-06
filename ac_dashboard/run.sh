@@ -20,5 +20,19 @@ with open("groups.yaml", "w") as f:
     yaml.safe_dump({"groups": options.get("groups", [])}, f)
 PY
 
-bashio::log.info "Starting AC Dashboard on port 8088"
-exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8088
+SSL_ARGS=""
+if bashio::config.true 'ssl'; then
+    CERTFILE="/ssl/$(bashio::config 'certfile')"
+    KEYFILE="/ssl/$(bashio::config 'keyfile')"
+    if [ ! -f "${CERTFILE}" ] || [ ! -f "${KEYFILE}" ]; then
+        bashio::log.fatal "ssl is enabled but ${CERTFILE} or ${KEYFILE} is missing"
+        exit 1
+    fi
+    SSL_ARGS="--ssl-certfile ${CERTFILE} --ssl-keyfile ${KEYFILE}"
+    bashio::log.info "Starting AC Dashboard on port 8088 (HTTPS)"
+else
+    bashio::log.info "Starting AC Dashboard on port 8088 (HTTP)"
+fi
+
+# shellcheck disable=SC2086
+exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8088 ${SSL_ARGS}

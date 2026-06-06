@@ -34,6 +34,34 @@ Dry / Fan / Auto — only modes the unit supports) and a target-temperature
 stepper. Each group header has **All Off** / **All On** buttons and a group
 temperature stepper that applies to every unit in the group.
 
+## HTTPS
+
+The dashboard can serve HTTPS using a certificate from Home Assistant's
+`/ssl` folder:
+
+```yaml
+ssl: true
+certfile: fullchain.pem
+keyfile: privkey.pem
+```
+
+To get a browser-trusted certificate without exposing anything to the
+internet, the usual recipe is:
+
+1. Create a free [DuckDNS](https://www.duckdns.org) subdomain and set its IP
+   to your Home Assistant host's address (its Tailscale IP if your family
+   uses Tailscale, otherwise its LAN IP).
+2. Install the official **Let's Encrypt** app, configured with the
+   `dns-duckdns` challenge and your DuckDNS token — it writes
+   `fullchain.pem`/`privkey.pem` into `/ssl`. Restart it every couple of
+   months to renew (an HA automation can do this on a schedule).
+3. Enable `ssl: true` here and restart this app.
+4. Use `https://<your-subdomain>.duckdns.org:8088` — the certificate is only
+   valid for that hostname, not for IPs or `.local` names.
+
+After that, phones can add the page to their home screen and it opens
+standalone like an app (icon and manifest are built in).
+
 ## Security
 
 The dashboard has **no authentication** — anyone who can reach port 8088 can
