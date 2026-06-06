@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, model_validator
 
 from app.config import Settings, load_groups
 from app.ha_client import HAClient, HAError
@@ -31,6 +32,36 @@ def get_groups(request: Request) -> list:
 @app.exception_handler(HAError)
 async def ha_error_handler(request: Request, exc: HAError) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+class SetCommand(BaseModel):
+    mode: str | None = None
+    temperature: float | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_field(self):
+        if self.mode is None and self.temperature is None:
+            raise ValueError("provide mode and/or temperature")
+        return self
+
+
+async def apply_command(ha: HAClient, entity_id: str, cmd: SetCommand) -> None:
+    if cmd.mode == "on":
+        await ha.turn_on(entity_id)
+    elif cmd.mode is not None:
+        await ha.set_hvac_mode(entity_id, cmd.mode)
+    if cmd.temperature is not None:
+        await ha.set_temperature(entity_id, cmd.temperature)
+
+
+@app.post("/api/units/{entity_id}/set")
+async def set_unit(
+    entity_id: str,
+    cmd: SetCommand,
+    ha: HAClient = Depends(get_ha_client),
+):
+    await apply_command(ha, entity_id, cmd)
+    return {"ok": True}
 
 
 @app.get("/api/state")
