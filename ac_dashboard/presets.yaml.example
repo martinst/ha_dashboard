@@ -1,0 +1,9 @@
+# Local development only — the add-on generates presets.yaml from its options.
+presets:
+  - name: Evening warmth
+    entities:
+      - climate.living_left
+      - climate.living_right
+    mode: heat
+    temperature: 23
+    time: "18:00"

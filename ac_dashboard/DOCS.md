@@ -26,6 +26,27 @@ on the page under an "Ungrouped" section.
 
 Restart the app after changing the configuration.
 
+## Schedule presets
+
+Optional one-shot schedules for the **Schedule** tab. You define presets
+here; anyone can arm them from the page (picking day and time) and cancel
+them. A fired preset disarms itself.
+
+```yaml
+presets:
+  - name: Evening warmth
+    entities:
+      - climate.living_left
+      - climate.living_right
+    mode: heat          # any mode the units support, or "on" / "off"
+    temperature: 23     # optional — at least one of mode/temperature
+    time: "18:00"       # default time shown when arming
+```
+
+Armed schedules survive app restarts. If the app was stopped at the
+scheduled time, the action still runs if the app comes back within an hour;
+otherwise it is skipped (a log line records this).
+
 ## Usage
 
 Open `http://<your-ha-host>:8088` (or click **Open Web UI**). Each unit card

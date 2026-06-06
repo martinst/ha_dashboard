@@ -1,5 +1,5 @@
 name: AC Dashboard
-version: "1.1.0"
+version: "1.2.0"
 slug: ac_dashboard
 description: Simple web page for controlling AC units (climate entities) with custom groups — no HA login needed
 url: https://github.com/martinst/ha_dashboard
@@ -20,6 +20,7 @@ ports_description:
 webui: "[PROTO:ssl]://[HOST]:[PORT:8088]"
 options:
   groups: []
+  presets: []
   ssl: false
   certfile: fullchain.pem
   keyfile: privkey.pem
@@ -28,6 +29,13 @@ schema:
     - name: str
       entities:
         - str
+  presets:
+    - name: str
+      entities:
+        - str
+      mode: str?
+      temperature: float?
+      time: str
   ssl: bool
   certfile: str?
   keyfile: str?

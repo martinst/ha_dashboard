@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- New Schedule tab: arm one-shot schedules from config-defined presets
+  (adjustable day/time), cancel from any phone, armed state survives
+  restarts. Times follow Home Assistant's timezone.
+
 ## 1.1.0
 
 - HTTPS support: new `ssl`, `certfile`, `keyfile` options using certificates

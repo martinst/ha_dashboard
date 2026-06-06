@@ -9,7 +9,9 @@ export HA_TOKEN="${SUPERVISOR_TOKEN}"
 
 cd /opt/ac_dashboard
 
-# Convert the add-on options (Configuration tab) into groups.yaml.
+export SCHEDULES_PATH=/data/schedules.json
+
+# Convert the add-on options (Configuration tab) into groups.yaml + presets.yaml.
 python3 - <<'PY'
 import json
 import yaml
@@ -18,6 +20,8 @@ with open("/data/options.json") as f:
     options = json.load(f)
 with open("groups.yaml", "w") as f:
     yaml.safe_dump({"groups": options.get("groups", [])}, f)
+with open("presets.yaml", "w") as f:
+    yaml.safe_dump({"presets": options.get("presets", [])}, f)
 PY
 
 SSL_ARGS=""
