@@ -1,0 +1,25 @@
+name: AC Dashboard
+version: "1.0.0"
+slug: ac_dashboard
+description: Simple web page for controlling AC units (climate entities) with custom groups — no HA login needed
+url: https://github.com/martinst/ha_dashboard
+arch:
+  - aarch64
+  - armv7
+  - amd64
+init: false
+homeassistant_api: true
+startup: services
+boot: auto
+ports:
+  8088/tcp: 8088
+ports_description:
+  8088/tcp: Dashboard web UI
+webui: http://[HOST]:[PORT:8088]
+options:
+  groups: []
+schema:
+  groups:
+    - name: str
+      entities:
+        - str

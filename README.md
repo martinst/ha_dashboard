@@ -1,44 +1,42 @@
-# Daikin AC Dashboard
+# AC Dashboard — Home Assistant Add-on
 
-A simple web page for controlling Daikin AC units configured in Home
-Assistant. Runs next to HA on the Pi; reach it over your Tailscale/VPN —
-no HA login needed.
+A simple web page for controlling AC units configured in Home Assistant.
+Stripped-down controls with big touch targets, no HA login — made for family
+use on phones, reachable over your LAN or VPN (e.g. the Tailscale add-on).
 
-## Setup
+This repository is a Home Assistant **add-on repository** containing one
+add-on: [`ac_dashboard`](ac_dashboard/).
 
-1. **HA token**: in Home Assistant, go to your profile → Security →
-   Long-lived access tokens → Create token.
-2. Copy `.env.example` to `.env` and fill in `HA_URL` and `HA_TOKEN`.
-3. Copy `groups.yaml.example` to `groups.yaml` and list your units
-   (entity IDs are under Settings → Devices & Services → Entities in HA,
-   filter on "climate"). Units not listed appear under "Ungrouped".
-4. Install and run:
+## Install (Home Assistant OS / Supervised)
 
-   ```bash
-   python3 -m venv .venv
-   .venv/bin/pip install -r requirements.txt
-   .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8088
-   ```
+1. In Home Assistant: **Settings → Add-ons → Add-on Store**
+2. Top-right **⋮ menu → Repositories**, add:
+   `https://github.com/martinst/ha_dashboard`
+3. Refresh the store, open **AC Dashboard**, click **Install**
+   (the image builds on the device — takes a few minutes on a Pi)
+4. In the add-on's **Configuration** tab, define your groups
+   (see [DOCS](ac_dashboard/DOCS.md) for the format)
+5. **Start** the add-on, then open `http://<your-ha-host>:8088`
+   (or click **Open Web UI**)
 
-5. Open `http://<pi-address>:8088`.
+No access token setup is needed — the add-on talks to Home Assistant through
+the Supervisor.
 
-## Run on boot (systemd)
+## Security
 
-Adjust paths/user in `deploy/ha-dashboard.service` if yours differ, then:
+The dashboard has **no authentication** — it relies on being reachable only
+via your LAN/VPN. Do not port-forward port 8088 to the internet.
 
-```bash
-sudo cp deploy/ha-dashboard.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now ha-dashboard
-```
-
-## Tests
+## Local development
 
 ```bash
-.venv/bin/pytest
+cd ac_dashboard
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+cp .env.example .env       # point at your HA + a long-lived access token
+cp groups.yaml.example groups.yaml
+.venv/bin/pytest           # run the test suite
+.venv/bin/uvicorn app.main:app --port 8088
 ```
 
-## Security note
-
-The app has no authentication — it relies on being reachable only via
-your LAN/Tailscale network. Do not port-forward it to the internet.
+Design spec and implementation plan live under `docs/superpowers/`.
