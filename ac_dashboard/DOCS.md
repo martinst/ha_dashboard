@@ -24,7 +24,7 @@ Entity IDs are listed in HA under **Settings → Devices & Services → Entities
 (filter on "climate"). Any climate entity not listed in a group still appears
 on the page under an "Ungrouped" section.
 
-Restart the add-on after changing the configuration.
+Restart the app after changing the configuration.
 
 ## Usage
 
@@ -37,5 +37,5 @@ temperature stepper that applies to every unit in the group.
 ## Security
 
 The dashboard has **no authentication** — anyone who can reach port 8088 can
-control your AC units. Keep it on your LAN/VPN (e.g. the Tailscale add-on).
+control your AC units. Keep it on your LAN/VPN (e.g. the Tailscale app).
 Do **not** port-forward it to the internet.

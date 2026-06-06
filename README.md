@@ -1,25 +1,25 @@
-# AC Dashboard — Home Assistant Add-on
+# AC Dashboard — Home Assistant App
 
 A simple web page for controlling AC units configured in Home Assistant.
 Stripped-down controls with big touch targets, no HA login — made for family
-use on phones, reachable over your LAN or VPN (e.g. the Tailscale add-on).
+use on phones, reachable over your LAN or VPN (e.g. the Tailscale app).
 
-This repository is a Home Assistant **add-on repository** containing one
-add-on: [`ac_dashboard`](ac_dashboard/).
+This repository is a Home Assistant **app repository** (add-on repository)
+containing one app: [`ac_dashboard`](ac_dashboard/).
 
 ## Install (Home Assistant OS / Supervised)
 
-1. In Home Assistant: **Settings → Add-ons → Add-on Store**
+1. In Home Assistant: **Settings → Apps** (called Add-ons in older HA versions)
 2. Top-right **⋮ menu → Repositories**, add:
    `https://github.com/martinst/ha_dashboard`
 3. Refresh the store, open **AC Dashboard**, click **Install**
    (the image builds on the device — takes a few minutes on a Pi)
-4. In the add-on's **Configuration** tab, define your groups
+4. In the app's **Configuration** tab, define your groups
    (see [DOCS](ac_dashboard/DOCS.md) for the format)
-5. **Start** the add-on, then open `http://<your-ha-host>:8088`
+5. **Start** the app, then open `http://<your-ha-host>:8088`
    (or click **Open Web UI**)
 
-No access token setup is needed — the add-on talks to Home Assistant through
+No access token setup is needed — the app talks to Home Assistant through
 the Supervisor.
 
 ## Security
