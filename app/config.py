@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,4 +22,7 @@ def load_groups(path: str | Path = "groups.yaml") -> list[Group]:
     if not path.exists():
         return []
     data = yaml.safe_load(path.read_text()) or {}
-    return [Group(**g) for g in data.get("groups", [])]
+    try:
+        return [Group(**g) for g in data.get("groups", [])]
+    except (TypeError, ValidationError) as exc:
+        raise ValueError(f"Invalid groups.yaml ({path}): {exc}") from exc

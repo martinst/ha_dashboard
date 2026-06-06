@@ -1,3 +1,5 @@
+import pytest
+
 from app.config import Settings, load_groups
 
 
@@ -23,6 +25,13 @@ def test_load_groups_empty_file_returns_empty(tmp_path):
     f = tmp_path / "groups.yaml"
     f.write_text("")
     assert load_groups(f) == []
+
+
+def test_load_groups_malformed_raises_value_error(tmp_path):
+    f = tmp_path / "groups.yaml"
+    f.write_text("groups: hello\n")
+    with pytest.raises(ValueError, match="Invalid groups.yaml"):
+        load_groups(f)
 
 
 def test_settings_defaults():
