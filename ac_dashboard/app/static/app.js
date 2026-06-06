@@ -19,13 +19,21 @@ const timers = {};       // debounce timers, keyed by entity_id or "group:<name>
 const groupTemps = {};   // group name -> locally chosen group target temp
 const groupMsgs = {};    // group name -> {text, until} transient result message
 
+let scheduleState = { presets: [] };
+const armForm = {};         // preset id -> {day, time} (survives re-renders)
+const pendingSchedule = {}; // preset id -> suppress-poll-until timestamp
+
 // ---- polling ----
 
 async function poll() {
   try {
-    const resp = await fetch("/api/state");
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    mergeState(await resp.json());
+    const [stateResp, schedResp] = await Promise.all([
+      fetch("/api/state"),
+      fetch("/api/schedule"),
+    ]);
+    if (!stateResp.ok || !schedResp.ok) throw new Error("poll failed");
+    mergeState(await stateResp.json());
+    mergeSchedule(await schedResp.json());
     setConnected(true);
   } catch {
     setConnected(false);
@@ -47,6 +55,16 @@ function mergeState(fresh) {
     );
   }
   state = fresh;
+}
+
+function mergeSchedule(fresh) {
+  const now = Date.now();
+  const old = {};
+  for (const p of scheduleState.presets) old[p.id] = p;
+  fresh.presets = fresh.presets.map((p) =>
+    (pendingSchedule[p.id] || 0) > now && old[p.id] ? old[p.id] : p
+  );
+  scheduleState = fresh;
 }
 
 function setConnected(ok) {
@@ -138,8 +156,10 @@ function reportGroupResult(name, body) {
 // ---- rendering ----
 
 function render() {
-  const main = document.getElementById("groups");
-  main.replaceChildren(...state.groups.map(renderGroup));
+  document
+    .getElementById("groups")
+    .replaceChildren(...state.groups.map(renderGroup));
+  renderSchedule();
 }
 
 function renderGroup(group) {
@@ -204,6 +224,109 @@ function stepperEl(value, onStep, disabled = false) {
   return wrap;
 }
 
+// ---- schedule tab ----
+
+function renderSchedule() {
+  const main = document.getElementById("schedule");
+  if (!scheduleState.presets.length) {
+    main.replaceChildren(
+      el("p", "hint",
+         "No presets configured. Add a presets: section in the add-on configuration.")
+    );
+    return;
+  }
+  main.replaceChildren(...scheduleState.presets.map(renderPreset));
+}
+
+function renderPreset(p) {
+  const card = el("div", "card preset");
+  card.append(el("div", "unit-name", p.name));
+  card.append(el("div", "preset-summary", presetSummary(p)));
+  const row = el("div", "arm-row");
+  if (p.armed) {
+    row.append(el("span", "fires", firesLabel(p.armed.fires_at)));
+    row.append(btn("Cancel", "ctl cancel", () => cancelPreset(p)));
+  } else {
+    const form = armForm[p.id] ?? (armForm[p.id] = {
+      day: timePassedToday(p.time) ? "tomorrow" : "today",
+      time: p.time,
+    });
+    const daySel = document.createElement("select");
+    for (const [value, label] of [["today", "Today"], ["tomorrow", "Tomorrow"]]) {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = label;
+      if (form.day === value) o.selected = true;
+      daySel.append(o);
+    }
+    daySel.addEventListener("change", () => { form.day = daySel.value; });
+    const timeInput = document.createElement("input");
+    timeInput.type = "time";
+    timeInput.value = form.time;
+    timeInput.addEventListener("change", () => { form.time = timeInput.value; });
+    row.append(daySel, timeInput, btn("Arm", "ctl arm", () => armPreset(p)));
+  }
+  card.append(row);
+  return card;
+}
+
+function presetSummary(p) {
+  const action = [
+    p.mode ? (MODE_LABELS[p.mode] ?? p.mode) : null,
+    p.temperature != null ? `${p.temperature}°` : null,
+  ].filter(Boolean).join(" ");
+  return `${action} — ${p.entities.map(unitName).join(", ")}`;
+}
+
+function unitName(entityId) {
+  for (const g of state.groups)
+    for (const u of g.units)
+      if (u.entity_id === entityId) return u.name;
+  return entityId;
+}
+
+function timePassedToday(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const now = new Date();
+  return now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
+}
+
+function isoDate(offsetDays) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function firesLabel(iso) {
+  const time = iso.slice(11, 16);
+  const day = iso.slice(0, 10);
+  if (day === isoDate(0)) return `Fires today at ${time}`;
+  if (day === isoDate(1)) return `Fires tomorrow at ${time}`;
+  return `Fires ${day} at ${time}`;
+}
+
+async function armPreset(p) {
+  const form = armForm[p.id];
+  if (!form.time) return;
+  const date = isoDate(form.day === "tomorrow" ? 1 : 0);
+  p.armed = { fires_at: `${date}T${form.time}:00` };
+  pendingSchedule[p.id] = Date.now() + PENDING_MS;
+  render();
+  const body = await post(`/api/schedule/${p.id}/arm`, { date, time: form.time });
+  if (!body) {
+    // rejected (e.g. time just passed) or network error — revert
+    p.armed = null;
+    delete pendingSchedule[p.id];
+    render();
+  }
+}
+
+async function cancelPreset(p) {
+  p.armed = null;
+  pendingSchedule[p.id] = Date.now() + PENDING_MS;
+  render();
+  await post(`/api/schedule/${p.id}/cancel`, {});
+}
+
 // ---- helpers ----
 
 function el(tag, cls, text) {
@@ -233,6 +356,16 @@ function debounce(key, fn) {
   clearTimeout(timers[key]);
   timers[key] = setTimeout(fn, DEBOUNCE_MS);
 }
+
+function showTab(name) {
+  document.getElementById("groups").classList.toggle("hidden", name !== "control");
+  document.getElementById("schedule").classList.toggle("hidden", name !== "schedule");
+  document.getElementById("tab-control").classList.toggle("active", name === "control");
+  document.getElementById("tab-schedule").classList.toggle("active", name === "schedule");
+}
+
+document.getElementById("tab-control").addEventListener("click", () => showTab("control"));
+document.getElementById("tab-schedule").addEventListener("click", () => showTab("schedule"));
 
 poll();
 setInterval(poll, POLL_MS);

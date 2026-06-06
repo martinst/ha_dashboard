@@ -17,8 +17,13 @@
     <h1>AC Control</h1>
     <span id="status-dot" class="dot" title="Connection to Home Assistant"></span>
   </header>
+  <nav class="tabs">
+    <button id="tab-control" class="tab active">Control</button>
+    <button id="tab-schedule" class="tab">Schedule</button>
+  </nav>
   <div id="banner" class="banner hidden">Can't reach Home Assistant</div>
   <main id="groups"></main>
+  <main id="schedule" class="hidden"></main>
   <script src="/app.js"></script>
 </body>
 </html>

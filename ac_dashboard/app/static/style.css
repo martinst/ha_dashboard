@@ -156,3 +156,58 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-size: 0.85rem;
   width: 100%;
 }
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px;
+  max-width: 640px;
+  margin: 0 auto 4px;
+}
+.tab {
+  flex: 1;
+  background: transparent;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
+}
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent-cool);
+  font-weight: 600;
+}
+
+.preset-summary {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 2px;
+}
+
+.arm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.arm-row select,
+.arm-row input[type="time"] {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid #d4dae3;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+}
+.arm-row .arm {
+  margin-left: auto;
+  background: var(--accent-cool);
+  color: #fff;
+}
+.arm-row .cancel { margin-left: auto; }
+.fires { font-weight: 600; }
+
+.hint {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+}
