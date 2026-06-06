@@ -62,3 +62,32 @@ def test_set_unit_returns_502_when_ha_unreachable(make_client):
     client = make_client(FakeHAClient(fail_entities=["climate.bedroom"]))
     resp = client.post("/api/units/climate.bedroom/set", json={"mode": "cool"})
     assert resp.status_code == 502
+
+
+GROUPS = [Group(name="Upstairs", entities=["climate.bedroom", "climate.office"])]
+
+
+def test_set_group_fans_out_to_all_units(make_client):
+    fake = FakeHAClient()
+    client = make_client(fake, GROUPS)
+    resp = client.post("/api/groups/Upstairs/set", json={"mode": "off"})
+    assert resp.status_code == 200
+    assert resp.json() == {"total": 2, "succeeded": 2, "failed": []}
+    assert sorted(fake.calls) == [
+        ("set_hvac_mode", "climate.bedroom", "off"),
+        ("set_hvac_mode", "climate.office", "off"),
+    ]
+
+
+def test_set_group_reports_partial_failure(make_client):
+    fake = FakeHAClient(fail_entities=["climate.office"])
+    client = make_client(fake, GROUPS)
+    resp = client.post("/api/groups/Upstairs/set", json={"temperature": 22.0})
+    assert resp.status_code == 200
+    assert resp.json() == {"total": 2, "succeeded": 1, "failed": ["climate.office"]}
+
+
+def test_set_group_unknown_group_is_404(make_client):
+    client = make_client(FakeHAClient(), GROUPS)
+    resp = client.post("/api/groups/Basement/set", json={"mode": "off"})
+    assert resp.status_code == 404

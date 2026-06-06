@@ -1,6 +1,7 @@
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, model_validator
 
@@ -62,6 +63,32 @@ async def set_unit(
 ):
     await apply_command(ha, entity_id, cmd)
     return {"ok": True}
+
+
+@app.post("/api/groups/{name}/set")
+async def set_group(
+    name: str,
+    cmd: SetCommand,
+    ha: HAClient = Depends(get_ha_client),
+    groups: list = Depends(get_groups),
+):
+    group = next((g for g in groups if g.name == name), None)
+    if group is None:
+        raise HTTPException(status_code=404, detail=f"Unknown group: {name}")
+    results = await asyncio.gather(
+        *(apply_command(ha, entity_id, cmd) for entity_id in group.entities),
+        return_exceptions=True,
+    )
+    failed = [
+        entity_id
+        for entity_id, result in zip(group.entities, results)
+        if isinstance(result, Exception)
+    ]
+    return {
+        "total": len(group.entities),
+        "succeeded": len(group.entities) - len(failed),
+        "failed": failed,
+    }
 
 
 @app.get("/api/state")
