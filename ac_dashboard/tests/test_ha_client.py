@@ -92,3 +92,12 @@ async def test_non_json_response_raises_haerror():
 
     with pytest.raises(HAError):
         await make_ha_client(handler).get_climate_states()
+
+
+async def test_get_config_fetches_api_config():
+    def handler(request):
+        assert request.url.path == "/api/config"
+        return httpx.Response(200, json={"time_zone": "Europe/Stockholm"})
+
+    config = await make_ha_client(handler).get_config()
+    assert config["time_zone"] == "Europe/Stockholm"

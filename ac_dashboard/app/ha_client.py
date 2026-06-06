@@ -28,6 +28,9 @@ class HAClient:
         data = await self._request("GET", "/api/states")
         return [s for s in data if s["entity_id"].startswith("climate.")]
 
+    async def get_config(self) -> dict:
+        return await self._request("GET", "/api/config")
+
     async def set_hvac_mode(self, entity_id: str, mode: str) -> None:
         await self._request(
             "POST",
