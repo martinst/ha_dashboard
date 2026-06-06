@@ -84,3 +84,11 @@ async def test_connection_error_raises_haerror():
 
     with pytest.raises(HAError):
         await make_ha_client(handler).get_climate_states()
+
+
+async def test_non_json_response_raises_haerror():
+    def handler(request):
+        return httpx.Response(200, text="<html>not json</html>")
+
+    with pytest.raises(HAError):
+        await make_ha_client(handler).get_climate_states()
