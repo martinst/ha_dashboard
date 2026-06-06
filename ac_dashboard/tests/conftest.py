@@ -48,14 +48,16 @@ class FakeHAClient:
 
 @pytest.fixture
 def make_client():
-    """Returns a factory: make_client(fake_ha, groups) -> TestClient."""
+    """Returns a factory: make_client(fake_ha, groups, scheduler) -> TestClient."""
     from fastapi.testclient import TestClient
 
-    from app.main import app, get_groups, get_ha_client
+    from app.main import app, get_groups, get_ha_client, get_scheduler
 
-    def _make(fake_ha, groups=()):
+    def _make(fake_ha, groups=(), scheduler=None):
         app.dependency_overrides[get_ha_client] = lambda: fake_ha
         app.dependency_overrides[get_groups] = lambda: list(groups)
+        if scheduler is not None:
+            app.dependency_overrides[get_scheduler] = lambda: scheduler
         return TestClient(app)
 
     yield _make

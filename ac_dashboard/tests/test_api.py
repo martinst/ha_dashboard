@@ -91,3 +91,97 @@ def test_set_group_unknown_group_is_404(make_client):
     client = make_client(FakeHAClient(), GROUPS)
     resp = client.post("/api/groups/Basement/set", json={"mode": "off"})
     assert resp.status_code == 404
+
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from app.config import Preset
+from app.scheduler import Scheduler
+
+TZ = ZoneInfo("Europe/Stockholm")
+
+SCHED_PRESET = Preset(
+    name="Evening warmth",
+    entities=["climate.bedroom"],
+    mode="heat",
+    temperature=23.0,
+    time="18:00",
+)
+
+
+def make_sched(tmp_path, fake_ha):
+    return Scheduler(
+        [SCHED_PRESET],
+        fake_ha,
+        tmp_path / "schedules.json",
+        TZ,
+        now=lambda: datetime(2026, 6, 7, 12, 0, tzinfo=TZ),
+    )
+
+
+def test_get_schedule_lists_presets(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.get("/api/schedule")
+    assert resp.status_code == 200
+    (p,) = resp.json()["presets"]
+    assert p["id"] == "evening_warmth"
+    assert p["name"] == "Evening warmth"
+    assert p["time"] == "18:00"
+    assert p["armed"] is None
+
+
+def test_arm_endpoint_arms_preset(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm",
+        json={"date": "2026-06-08", "time": "18:00"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["fires_at"].startswith("2026-06-08T18:00")
+    armed = client.get("/api/schedule").json()["presets"][0]["armed"]
+    assert armed["fires_at"].startswith("2026-06-08T18:00")
+
+
+def test_arm_past_time_is_400(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm",
+        json={"date": "2026-06-07", "time": "11:00"},
+    )
+    assert resp.status_code == 400
+
+
+def test_arm_bad_date_is_400(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm",
+        json={"date": "not-a-date", "time": "18:00"},
+    )
+    assert resp.status_code == 400
+
+
+def test_arm_unknown_preset_is_404(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/ghost/arm", json={"date": "2026-06-08", "time": "18:00"}
+    )
+    assert resp.status_code == 404
+
+
+def test_cancel_endpoint_disarms(make_client, tmp_path):
+    fake = FakeHAClient()
+    sched = make_sched(tmp_path, fake)
+    client = make_client(fake, scheduler=sched)
+    client.post(
+        "/api/schedule/evening_warmth/arm",
+        json={"date": "2026-06-08", "time": "18:00"},
+    )
+    resp = client.post("/api/schedule/evening_warmth/cancel")
+    assert resp.status_code == 200
+    assert client.get("/api/schedule").json()["presets"][0]["armed"] is None
