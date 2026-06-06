@@ -28,6 +28,7 @@ Adjust paths/user in `deploy/ha-dashboard.service` if yours differ, then:
 
 ```bash
 sudo cp deploy/ha-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable --now ha-dashboard
 ```
 
