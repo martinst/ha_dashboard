@@ -110,7 +110,7 @@ def serialize_schedule(scheduler: Scheduler) -> dict:
                 "temperature": p.temperature,
                 "time": p.time,
                 "armed": (
-                    {"fires_at": scheduler.armed[p.id].isoformat()}
+                    scheduler.armed[p.id].to_json()
                     if p.id in scheduler.armed
                     else None
                 ),
@@ -132,12 +132,12 @@ async def arm_preset(
     scheduler: Scheduler = Depends(get_scheduler),
 ):
     try:
-        fires_at = scheduler.arm(preset_id, req.date, req.time)
+        arm = scheduler.arm(preset_id, req.date, req.time)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown preset: {preset_id}")
     except ValueError as exc:  # ArmError or unparsable date/time
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"fires_at": fires_at.isoformat()}
+    return arm.to_json()
 
 
 @app.post("/api/schedule/{preset_id}/cancel")

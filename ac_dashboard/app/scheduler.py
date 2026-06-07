@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -19,6 +20,20 @@ TICK_SECONDS = 10
 
 class ArmError(ValueError):
     """Raised when an arm request is invalid (past time, too far ahead)."""
+
+
+@dataclass
+class OnceArm:
+    """A one-shot armed schedule: fires once, then disarms."""
+
+    fires_at: datetime
+
+    @property
+    def due_at(self) -> datetime:
+        return self.fires_at
+
+    def to_json(self) -> dict:
+        return {"type": "once", "fires_at": self.fires_at.isoformat()}
 
 
 async def fetch_timezone(ha: HAClient):
@@ -41,7 +56,7 @@ class Scheduler:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._tz = tz
         self._now = now or (lambda: datetime.now(self._tz))
-        self.armed: dict[str, datetime] = {}
+        self.armed: dict[str, OnceArm] = {}
         self._task: asyncio.Task | None = None
         self._load()
 
@@ -55,22 +70,33 @@ class Scheduler:
         except (OSError, ValueError) as exc:
             log.warning("Ignoring corrupt %s: %s", self._path, exc)
             return
-        for preset_id, iso in raw.items():
+        for preset_id, entry in raw.items():
             if preset_id not in self.presets:
                 log.warning("Dropping armed schedule for unknown preset %r", preset_id)
                 continue
-            self.armed[preset_id] = datetime.fromisoformat(iso)
+            try:
+                self.armed[preset_id] = self._entry_from_json(entry)
+            except (KeyError, TypeError, ValueError) as exc:
+                log.warning("Dropping unreadable schedule for %r: %s", preset_id, exc)
+
+    @staticmethod
+    def _entry_from_json(entry):
+        if isinstance(entry, str):  # legacy v1.2.0 format: bare ISO datetime
+            return OnceArm(fires_at=datetime.fromisoformat(entry))
+        if entry["type"] == "once":
+            return OnceArm(fires_at=datetime.fromisoformat(entry["fires_at"]))
+        raise ValueError(f"unknown schedule type {entry.get('type')!r}")
 
     def _save(self) -> None:
         tmp = self._path.with_suffix(".tmp")
         tmp.write_text(
-            json.dumps({pid: dt.isoformat() for pid, dt in self.armed.items()})
+            json.dumps({pid: arm.to_json() for pid, arm in self.armed.items()})
         )
         os.replace(tmp, self._path)
 
     # -- arm / cancel --
 
-    def arm(self, preset_id: str, date_str: str, time_str: str) -> datetime:
+    def arm(self, preset_id: str, date_str: str, time_str: str) -> OnceArm:
         if preset_id not in self.presets:
             raise KeyError(preset_id)
         fires_at = datetime.fromisoformat(f"{date_str}T{time_str}").replace(
@@ -81,9 +107,10 @@ class Scheduler:
             raise ArmError("fire time is in the past")
         if fires_at - now > MAX_AHEAD:
             raise ArmError("fire time is more than 7 days ahead")
-        self.armed[preset_id] = fires_at
+        arm = OnceArm(fires_at=fires_at)
+        self.armed[preset_id] = arm
         self._save()
-        return fires_at
+        return arm
 
     def cancel(self, preset_id: str) -> None:
         if preset_id not in self.presets:
@@ -114,16 +141,17 @@ class Scheduler:
 
     async def check_due(self) -> None:
         now = self._now()
-        for preset_id, fires_at in list(self.armed.items()):
-            if fires_at > now:
+        for preset_id, arm in list(self.armed.items()):
+            due = arm.due_at
+            if due > now:
                 continue
             del self.armed[preset_id]
             self._save()
-            if now - fires_at > GRACE:
+            if now - due > GRACE:
                 log.warning(
                     "Discarding %r: fire time %s is too far in the past",
                     preset_id,
-                    fires_at,
+                    due,
                 )
                 continue
             await self._fire(self.presets[preset_id])

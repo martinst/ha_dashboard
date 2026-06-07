@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.config import Preset
-from app.scheduler import ArmError, Scheduler
+from app.scheduler import ArmError, OnceArm, Scheduler
 
 from tests.conftest import FakeHAClient
 
@@ -39,13 +39,16 @@ def make_scheduler(tmp_path, clock, presets=(PRESET,), ha=None):
     )
 
 
-def test_arm_returns_aware_datetime_and_persists(tmp_path):
+def test_arm_returns_once_record_and_persists(tmp_path):
     s = make_scheduler(tmp_path, Clock())
-    fires = s.arm("evening_warmth", "2026-06-08", "18:00")
-    assert fires.isoformat().startswith("2026-06-08T18:00")
-    assert fires.tzinfo is not None
+    arm = s.arm("evening_warmth", "2026-06-08", "18:00")
+    assert isinstance(arm, OnceArm)
+    assert arm.fires_at.isoformat().startswith("2026-06-08T18:00")
+    assert arm.fires_at.tzinfo is not None
     saved = json.loads((tmp_path / "schedules.json").read_text())
-    assert saved == {"evening_warmth": fires.isoformat()}
+    assert saved == {
+        "evening_warmth": {"type": "once", "fires_at": arm.fires_at.isoformat()}
+    }
 
 
 def test_arm_past_raises(tmp_path):
@@ -70,7 +73,7 @@ def test_rearm_replaces(tmp_path):
     s = make_scheduler(tmp_path, Clock())
     s.arm("evening_warmth", "2026-06-08", "18:00")
     fires = s.arm("evening_warmth", "2026-06-08", "19:30")
-    assert s.armed["evening_warmth"] == fires
+    assert s.armed["evening_warmth"] is fires
     assert len(s.armed) == 1
 
 
@@ -180,3 +183,13 @@ def test_arm_creates_missing_state_directory(tmp_path):
     )
     s.arm("evening_warmth", "2026-06-08", "18:00")
     assert (tmp_path / "nested" / "dir" / "schedules.json").exists()
+
+
+def test_legacy_string_entry_loads_as_once(tmp_path):
+    (tmp_path / "schedules.json").write_text(
+        json.dumps({"evening_warmth": "2026-06-08T18:00:00+02:00"})
+    )
+    s = make_scheduler(tmp_path, Clock())
+    arm = s.armed["evening_warmth"]
+    assert isinstance(arm, OnceArm)
+    assert arm.fires_at.isoformat() == "2026-06-08T18:00:00+02:00"
