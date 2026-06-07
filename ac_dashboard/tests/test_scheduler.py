@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.config import Preset
-from app.scheduler import ArmError, OnceArm, Scheduler
+from app.scheduler import ArmError, OnceArm, Scheduler, WeeklyArm
 
 from tests.conftest import FakeHAClient
 
@@ -193,3 +193,96 @@ def test_legacy_string_entry_loads_as_once(tmp_path):
     arm = s.armed["evening_warmth"]
     assert isinstance(arm, OnceArm)
     assert arm.fires_at.isoformat() == "2026-06-08T18:00:00+02:00"
+
+
+def test_arm_weekly_returns_record_and_persists(tmp_path):
+    s = make_scheduler(tmp_path, Clock())
+    arm = s.arm_weekly("evening_warmth", [0, 1, 2, 3, 4], "18:00")
+    assert isinstance(arm, WeeklyArm)
+    assert arm.days == {0, 1, 2, 3, 4}
+    assert arm.time == "18:00"
+    assert arm.next_fire.isoformat().startswith("2026-06-08T18:00")  # Monday
+    saved = json.loads((tmp_path / "schedules.json").read_text())
+    assert saved == {
+        "evening_warmth": {
+            "type": "weekly",
+            "days": [0, 1, 2, 3, 4],
+            "time": "18:00",
+            "next_fire": arm.next_fire.isoformat(),
+        }
+    }
+
+
+def test_arm_weekly_empty_days_raises(tmp_path):
+    s = make_scheduler(tmp_path, Clock())
+    with pytest.raises(ArmError, match="at least one day"):
+        s.arm_weekly("evening_warmth", [], "18:00")
+
+
+def test_arm_weekly_invalid_day_raises(tmp_path):
+    s = make_scheduler(tmp_path, Clock())
+    with pytest.raises(ArmError, match="0-6"):
+        s.arm_weekly("evening_warmth", [0, 7], "18:00")
+
+
+def test_arm_weekly_bad_time_raises(tmp_path):
+    s = make_scheduler(tmp_path, Clock())
+    with pytest.raises(ArmError, match="HH:MM"):
+        s.arm_weekly("evening_warmth", [0], "25:99")
+
+
+def test_arm_weekly_unknown_preset_raises(tmp_path):
+    s = make_scheduler(tmp_path, Clock())
+    with pytest.raises(KeyError):
+        s.arm_weekly("ghost", [0], "18:00")
+
+
+def test_weekly_next_fire_today_when_time_ahead(tmp_path):
+    s = make_scheduler(tmp_path, Clock())  # Sunday 12:00
+    arm = s.arm_weekly("evening_warmth", [6], "14:00")  # Sunday selected
+    assert arm.next_fire.isoformat().startswith("2026-06-07T14:00")
+
+
+def test_weekly_next_fire_wraps_to_next_week_when_time_passed(tmp_path):
+    s = make_scheduler(tmp_path, Clock())  # Sunday 12:00
+    arm = s.arm_weekly("evening_warmth", [6], "11:00")  # already passed today
+    assert arm.next_fire.isoformat().startswith("2026-06-14T11:00")
+
+
+async def test_weekly_fire_advances_and_stays_armed(tmp_path):
+    clock = Clock()
+    ha = FakeHAClient()
+    s = make_scheduler(tmp_path, clock, ha=ha)
+    s.arm_weekly("evening_warmth", [6], "14:00")
+    clock.now = datetime(2026, 6, 7, 14, 0, 30, tzinfo=TZ)
+    await s.check_due()
+    assert ("set_hvac_mode", "climate.a", "heat") in ha.calls
+    arm = s.armed["evening_warmth"]
+    assert arm.next_fire.isoformat().startswith("2026-06-14T14:00")
+
+
+async def test_weekly_missed_beyond_grace_advances_without_firing(tmp_path):
+    clock = Clock()
+    ha = FakeHAClient()
+    s = make_scheduler(tmp_path, clock, ha=ha)
+    s.arm_weekly("evening_warmth", [6], "14:00")
+    clock.now = datetime(2026, 6, 7, 16, 0, tzinfo=TZ)  # 2h late
+    await s.check_due()
+    assert ha.calls == []
+    arm = s.armed["evening_warmth"]
+    assert arm.next_fire.isoformat().startswith("2026-06-14T14:00")
+
+
+def test_weekly_persistence_round_trip(tmp_path):
+    clock = Clock()
+    s1 = make_scheduler(tmp_path, clock)
+    arm = s1.arm_weekly("evening_warmth", [0, 6], "18:00")
+    s2 = make_scheduler(tmp_path, clock)
+    assert s2.armed == {"evening_warmth": arm}
+
+
+def test_rearm_across_types_replaces(tmp_path):
+    s = make_scheduler(tmp_path, Clock())
+    s.arm("evening_warmth", "2026-06-08", "18:00")
+    weekly = s.arm_weekly("evening_warmth", [0], "18:00")
+    assert s.armed == {"evening_warmth": weekly}

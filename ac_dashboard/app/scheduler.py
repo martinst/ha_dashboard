@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -36,6 +37,27 @@ class OnceArm:
         return {"type": "once", "fires_at": self.fires_at.isoformat()}
 
 
+@dataclass
+class WeeklyArm:
+    """A recurring armed schedule: fires on selected weekdays until cancelled."""
+
+    days: set[int]  # Mon=0 .. Sun=6
+    time: str  # "HH:MM"
+    next_fire: datetime
+
+    @property
+    def due_at(self) -> datetime:
+        return self.next_fire
+
+    def to_json(self) -> dict:
+        return {
+            "type": "weekly",
+            "days": sorted(self.days),
+            "time": self.time,
+            "next_fire": self.next_fire.isoformat(),
+        }
+
+
 async def fetch_timezone(ha: HAClient):
     """HA's configured timezone, falling back to system local time."""
     try:
@@ -56,7 +78,7 @@ class Scheduler:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._tz = tz
         self._now = now or (lambda: datetime.now(self._tz))
-        self.armed: dict[str, OnceArm] = {}
+        self.armed: dict[str, OnceArm | WeeklyArm] = {}
         self._task: asyncio.Task | None = None
         self._load()
 
@@ -85,6 +107,12 @@ class Scheduler:
             return OnceArm(fires_at=datetime.fromisoformat(entry))
         if entry["type"] == "once":
             return OnceArm(fires_at=datetime.fromisoformat(entry["fires_at"]))
+        if entry["type"] == "weekly":
+            return WeeklyArm(
+                days=set(entry["days"]),
+                time=entry["time"],
+                next_fire=datetime.fromisoformat(entry["next_fire"]),
+            )
         raise ValueError(f"unknown schedule type {entry.get('type')!r}")
 
     def _save(self) -> None:
@@ -118,6 +146,38 @@ class Scheduler:
         if self.armed.pop(preset_id, None) is not None:
             self._save()
 
+    def arm_weekly(self, preset_id: str, days: list[int], time_str: str) -> "WeeklyArm":
+        if preset_id not in self.presets:
+            raise KeyError(preset_id)
+        day_set = set(days)
+        if not day_set:
+            raise ArmError("select at least one day")
+        if not day_set <= set(range(7)):
+            raise ArmError("repeat days must be 0-6 (Mon-Sun)")
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", time_str):
+            raise ArmError(f"time must be HH:MM, got {time_str!r}")
+        arm = WeeklyArm(
+            days=day_set,
+            time=time_str,
+            next_fire=self._next_occurrence(self._now(), day_set, time_str),
+        )
+        self.armed[preset_id] = arm
+        self._save()
+        return arm
+
+    def _next_occurrence(self, start: datetime, days: set[int], time_str: str) -> datetime:
+        hour, minute = (int(part) for part in time_str.split(":"))
+        for offset in range(8):
+            day = (start + timedelta(days=offset)).date()
+            if day.weekday() not in days:
+                continue
+            candidate = datetime(
+                day.year, day.month, day.day, hour, minute, tzinfo=self._tz
+            )
+            if candidate > start:
+                return candidate
+        raise ArmError("no upcoming occurrence")  # unreachable with valid days
+
     # -- firing loop --
 
     def start(self) -> None:
@@ -145,11 +205,14 @@ class Scheduler:
             due = arm.due_at
             if due > now:
                 continue
-            del self.armed[preset_id]
+            if isinstance(arm, WeeklyArm):
+                arm.next_fire = self._next_occurrence(now, arm.days, arm.time)
+            else:
+                del self.armed[preset_id]
             self._save()
             if now - due > GRACE:
                 log.warning(
-                    "Discarding %r: fire time %s is too far in the past",
+                    "Skipping %r: fire time %s is too far in the past",
                     preset_id,
                     due,
                 )
