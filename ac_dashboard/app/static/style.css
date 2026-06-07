@@ -211,3 +211,35 @@ button:disabled { opacity: 0.4; cursor: default; }
   text-align: center;
   padding: 24px 12px;
 }
+
+.mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.mode-opt {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+}
+.mode-opt.active {
+  background: var(--text);
+  color: #fff;
+}
+
+.day-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.day-chip {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.day-chip.active {
+  background: var(--accent-cool);
+  color: #fff;
+}
