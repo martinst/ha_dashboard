@@ -185,3 +185,68 @@ def test_cancel_endpoint_disarms(make_client, tmp_path):
     resp = client.post("/api/schedule/evening_warmth/cancel")
     assert resp.status_code == 200
     assert client.get("/api/schedule").json()["presets"][0]["armed"] is None
+
+
+def test_arm_weekly_endpoint(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm",
+        json={"repeat": [0, 1, 2, 3, 4], "time": "18:00"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["type"] == "weekly"
+    assert body["days"] == [0, 1, 2, 3, 4]
+    assert body["time"] == "18:00"
+    assert body["next_fire"].startswith("2026-06-08T18:00")  # Monday
+    armed = client.get("/api/schedule").json()["presets"][0]["armed"]
+    assert armed["type"] == "weekly"
+
+
+def test_arm_weekly_empty_repeat_is_400(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm", json={"repeat": [], "time": "18:00"}
+    )
+    assert resp.status_code == 400
+
+
+def test_arm_weekly_invalid_day_is_400(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm", json={"repeat": [7], "time": "18:00"}
+    )
+    assert resp.status_code == 400
+
+
+def test_arm_both_date_and_repeat_is_422(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm",
+        json={"date": "2026-06-08", "repeat": [0], "time": "18:00"},
+    )
+    assert resp.status_code == 422
+
+
+def test_arm_neither_date_nor_repeat_is_422(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/evening_warmth/arm", json={"time": "18:00"}
+    )
+    assert resp.status_code == 422
+
+
+def test_cancel_weekly_arm(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_sched(tmp_path, fake))
+    client.post(
+        "/api/schedule/evening_warmth/arm", json={"repeat": [0], "time": "18:00"}
+    )
+    resp = client.post("/api/schedule/evening_warmth/cancel")
+    assert resp.status_code == 200
+    assert client.get("/api/schedule").json()["presets"][0]["armed"] is None

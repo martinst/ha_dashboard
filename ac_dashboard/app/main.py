@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -95,8 +95,15 @@ async def get_state(
 
 
 class ArmRequest(BaseModel):
-    date: str
+    date: str | None = None
     time: str
+    repeat: list[int] | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_mode(self):
+        if (self.date is None) == (self.repeat is None):
+            raise ValueError("provide exactly one of date or repeat")
+        return self
 
 
 def serialize_schedule(scheduler: Scheduler) -> dict:
@@ -132,7 +139,10 @@ async def arm_preset(
     scheduler: Scheduler = Depends(get_scheduler),
 ):
     try:
-        arm = scheduler.arm(preset_id, req.date, req.time)
+        if req.repeat is not None:
+            arm = scheduler.arm_weekly(preset_id, req.repeat, req.time)
+        else:
+            arm = scheduler.arm(preset_id, req.date, req.time)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown preset: {preset_id}")
     except ValueError as exc:  # ArmError or unparsable date/time
