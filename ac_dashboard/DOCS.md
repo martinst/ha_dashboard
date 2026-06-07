@@ -28,9 +28,9 @@ Restart the app after changing the configuration.
 
 ## Schedule presets
 
-Optional one-shot schedules for the **Schedule** tab. You define presets
-here; anyone can arm them from the page (picking day and time) and cancel
-them. A fired preset disarms itself.
+Optional schedules for the **Schedule** tab. You define presets here;
+anyone can arm them from the page (picking day and time) and cancel them.
+A fired one-shot preset disarms itself; a repeating one stays armed.
 
 ```yaml
 presets:
