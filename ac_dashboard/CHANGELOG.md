@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- Repeat mode: arm a preset to fire on chosen weekdays at a chosen time
+  until cancelled. One-shot arming unchanged. Armed schedules from 1.2.0
+  carry over.
+
 ## 1.2.0
 
 - New Schedule tab: arm one-shot schedules from config-defined presets

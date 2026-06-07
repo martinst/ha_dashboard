@@ -47,6 +47,10 @@ Armed schedules survive app restarts. If the app was stopped at the
 scheduled time, the action still runs if the app comes back within an hour;
 otherwise it is skipped (a log line records this).
 
+When arming you can pick **Once** (fires once, then disarms) or **Repeat**
+(pick weekdays; fires on each selected day at the chosen time until
+cancelled).
+
 ## Usage
 
 Open `http://<your-ha-host>:8088` (or click **Open Web UI**). Each unit card
