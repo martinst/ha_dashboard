@@ -378,3 +378,22 @@ def test_static_files_are_served_no_cache(make_client):
         resp = client.get(path)
         assert resp.status_code == 200
         assert resp.headers["cache-control"] == "no-cache", path
+
+
+def test_static_asset_links_are_version_busted():
+    # Cached assets from older versions must never pair with fresh HTML:
+    # asset URLs carry ?v=<add-on version> so each release gets new URLs.
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).parent.parent
+    version = yaml.safe_load((root / "config.yaml").read_text())["version"]
+    pages = {
+        "index.html": ("/style.css", "/shared.js", "/app.js"),
+        "windows.html": ("/style.css", "/shared.js", "/windows.js"),
+    }
+    for page, assets in pages.items():
+        html = (root / "app" / "static" / page).read_text()
+        for asset in assets:
+            assert f'"{asset}?v={version}"' in html, f"{page}: {asset}"

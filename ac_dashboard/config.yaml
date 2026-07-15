@@ -1,5 +1,5 @@
 name: Home Dashboard
-version: "1.4.2"
+version: "1.4.3"
 slug: ac_dashboard
 description: Simple web pages for controlling AC units and motorized windows — no HA login needed
 url: https://github.com/martinst/ha_dashboard

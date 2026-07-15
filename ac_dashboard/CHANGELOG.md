@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.3
+
+- Fix: version-stamped asset URLs (`style.css?v=…`, scripts) so browsers that
+  cached files from an older version can never mix them with new pages — no
+  manual cache clearing needed on phones after updates
+
 ## 1.4.2
 
 - Fix: serve all pages/scripts/styles with `Cache-Control: no-cache` so
