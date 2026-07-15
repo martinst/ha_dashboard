@@ -5,6 +5,7 @@ const STATE_LABELS = {
   closed: "Closed",
   opening: "Opening…",
   closing: "Closing…",
+  unknown: "–", // stateless covers (e.g. Somfy RTS) report no state
 };
 
 let state = { cover_groups: [] };

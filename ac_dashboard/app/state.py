@@ -47,7 +47,9 @@ def cover_from_ha_state(state: dict) -> dict:
         "position": position,
         "supports_position": bool(features & SUPPORT_SET_POSITION)
         or position is not None,
-        "available": state.get("state") not in ("unavailable", "unknown"),
+        # "unknown" stays available: stateless covers (e.g. Somfy RTS) report
+        # no position/state but still accept commands.
+        "available": state.get("state") != "unavailable",
     }
 
 

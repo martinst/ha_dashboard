@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1
+
+- Fix: windows whose state HA reports as "unknown" (stateless covers such as
+  Somfy RTS, no position feedback) were shown as unavailable with controls
+  disabled; they are now controllable and show "–" as their state
+
 ## 1.4.0
 
 - Renamed to **Home Dashboard** — now controls motorized windows as well as AC

@@ -115,3 +115,14 @@ def test_unlisted_covers_land_in_ungrouped_sorted_by_name():
     result = build_cover_groups(states, groups)
     assert [g["name"] for g in result] == ["G", "Ungrouped"]
     assert [u["name"] for u in result[1]["units"]] == ["Alpha", "Zeta"]
+
+
+def test_unknown_cover_state_is_available():
+    # Somfy RTS covers have no state feedback: HA reports "unknown" but they
+    # accept commands, so they must not be rendered as unavailable.
+    states = [cover_ha_state("cover.rts", state="unknown",
+                             supported_features=11, current_position=None)]
+    result = build_cover_groups(states, [Group(name="G", entities=["cover.rts"])])
+    unit = result[0]["units"][0]
+    assert unit["available"] is True
+    assert unit["state"] == "unknown"
