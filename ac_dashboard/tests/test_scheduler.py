@@ -286,3 +286,25 @@ def test_rearm_across_types_replaces(tmp_path):
     s.arm("evening_warmth", "2026-06-08", "18:00")
     weekly = s.arm_weekly("evening_warmth", [0], "18:00")
     assert s.armed == {"evening_warmth": weekly}
+
+
+from app.config import CoverPreset
+
+COVER_PRESET = CoverPreset(
+    name="Night close",
+    entities=["cover.a", "cover.b"],
+    action="close",
+    time="22:00",
+)
+
+
+async def test_cover_preset_fires_cover_commands(tmp_path):
+    clock = Clock()
+    ha = FakeHAClient()
+    s = make_scheduler(tmp_path, clock, presets=(COVER_PRESET,), ha=ha)
+    s.arm("cover:night_close", "2026-06-07", "14:00")
+    clock.now = datetime(2026, 6, 7, 14, 0, 30, tzinfo=TZ)
+    await s.check_due()
+    assert ("close_cover", "cover.a") in ha.calls
+    assert ("close_cover", "cover.b") in ha.calls
+    assert s.armed == {}

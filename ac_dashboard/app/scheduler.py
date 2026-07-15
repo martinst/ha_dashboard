@@ -8,8 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from app.commands import SetCommand, apply_command
-from app.config import Preset
+from app.commands import apply_command
 from app.ha_client import HAClient
 
 log = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ async def fetch_timezone(ha: HAClient):
 class Scheduler:
     """One-shot preset schedules: armed state, persistence, firing loop."""
 
-    def __init__(self, presets: list[Preset], ha: HAClient, path, tz, now=None):
+    def __init__(self, presets: list, ha: HAClient, path, tz, now=None):
         self.presets = {p.id: p for p in presets}
         self._ha = ha
         self._path = Path(path)
@@ -219,8 +218,8 @@ class Scheduler:
                 continue
             await self._fire(self.presets[preset_id])
 
-    async def _fire(self, preset: Preset) -> None:
-        cmd = SetCommand(mode=preset.mode, temperature=preset.temperature)
+    async def _fire(self, preset) -> None:
+        cmd = preset.command()
         results = await asyncio.gather(
             *(apply_command(self._ha, entity_id, cmd) for entity_id in preset.entities),
             return_exceptions=True,
