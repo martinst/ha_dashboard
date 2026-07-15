@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.2
+
+- Fix: serve all pages/scripts/styles with `Cache-Control: no-cache` so
+  browsers revalidate after updates — stale cached scripts from an older
+  version could leave the AC page blank and the page navigation unstyled
+
 ## 1.4.1
 
 - Fix: windows whose state HA reports as "unknown" (stateless covers such as

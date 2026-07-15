@@ -368,3 +368,13 @@ def test_arm_and_cancel_cover_preset(make_client, tmp_path):
     assert resp.json()["fires_at"].startswith("2026-06-08T22:00")
     resp = client.post("/api/schedule/cover:night_close/cancel")
     assert resp.status_code == 200
+
+
+def test_static_files_are_served_no_cache(make_client):
+    # Phones cache JS/CSS aggressively; without no-cache a release can pair
+    # fresh HTML with stale scripts (const collisions -> blank page).
+    client = make_client(FakeHAClient())
+    for path in ("/", "/style.css", "/app.js", "/shared.js", "/windows.html"):
+        resp = client.get(path)
+        assert resp.status_code == 200
+        assert resp.headers["cache-control"] == "no-cache", path

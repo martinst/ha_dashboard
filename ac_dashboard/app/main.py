@@ -209,5 +209,18 @@ async def cancel_preset(
     return {"ok": True}
 
 
+class NoCacheStaticFiles(StaticFiles):
+    """Static files with forced revalidation.
+
+    Phone browsers cache assets aggressively; without no-cache a release can
+    pair fresh HTML with stale scripts. no-cache still allows ETag 304s.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 STATIC_DIR = Path(__file__).parent / "static"
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+app.mount("/", NoCacheStaticFiles(directory=STATIC_DIR, html=True), name="static")
