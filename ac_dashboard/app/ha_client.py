@@ -24,9 +24,8 @@ class HAClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def get_climate_states(self) -> list[dict]:
-        data = await self._request("GET", "/api/states")
-        return [s for s in data if s["entity_id"].startswith("climate.")]
+    async def get_states(self) -> list[dict]:
+        return await self._request("GET", "/api/states")
 
     async def get_config(self) -> dict:
         return await self._request("GET", "/api/config")
@@ -51,6 +50,34 @@ class HAClient:
             "POST",
             "/api/services/climate/turn_on",
             body={"entity_id": entity_id},
+        )
+
+    async def open_cover(self, entity_id: str) -> None:
+        await self._request(
+            "POST",
+            "/api/services/cover/open_cover",
+            body={"entity_id": entity_id},
+        )
+
+    async def close_cover(self, entity_id: str) -> None:
+        await self._request(
+            "POST",
+            "/api/services/cover/close_cover",
+            body={"entity_id": entity_id},
+        )
+
+    async def stop_cover(self, entity_id: str) -> None:
+        await self._request(
+            "POST",
+            "/api/services/cover/stop_cover",
+            body={"entity_id": entity_id},
+        )
+
+    async def set_cover_position(self, entity_id: str, position: int) -> None:
+        await self._request(
+            "POST",
+            "/api/services/cover/set_cover_position",
+            body={"entity_id": entity_id, "position": position},
         )
 
     async def _request(self, method: str, path: str, body: dict | None = None):

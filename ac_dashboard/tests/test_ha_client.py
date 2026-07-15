@@ -15,7 +15,7 @@ def make_ha_client(handler):
     return HAClient("http://ha.test", "secret-token", transport=httpx.MockTransport(handler))
 
 
-async def test_get_climate_states_filters_and_authenticates():
+async def test_get_states_returns_all_states_and_authenticates():
     seen = {}
 
     def handler(request):
@@ -24,9 +24,9 @@ async def test_get_climate_states_filters_and_authenticates():
         return httpx.Response(200, json=STATES)
 
     client = make_ha_client(handler)
-    states = await client.get_climate_states()
+    states = await client.get_states()
     assert seen == {"auth": "Bearer secret-token", "path": "/api/states"}
-    assert [s["entity_id"] for s in states] == ["climate.bedroom"]
+    assert [s["entity_id"] for s in states] == ["climate.bedroom", "light.kitchen"]
 
 
 async def test_set_hvac_mode_posts_service_call():
@@ -75,7 +75,7 @@ async def test_http_error_status_raises_haerror():
         return httpx.Response(500)
 
     with pytest.raises(HAError):
-        await make_ha_client(handler).get_climate_states()
+        await make_ha_client(handler).get_states()
 
 
 async def test_connection_error_raises_haerror():
@@ -83,7 +83,7 @@ async def test_connection_error_raises_haerror():
         raise httpx.ConnectError("connection refused")
 
     with pytest.raises(HAError):
-        await make_ha_client(handler).get_climate_states()
+        await make_ha_client(handler).get_states()
 
 
 async def test_non_json_response_raises_haerror():
@@ -91,7 +91,7 @@ async def test_non_json_response_raises_haerror():
         return httpx.Response(200, text="<html>not json</html>")
 
     with pytest.raises(HAError):
-        await make_ha_client(handler).get_climate_states()
+        await make_ha_client(handler).get_states()
 
 
 async def test_get_config_fetches_api_config():
@@ -101,3 +101,24 @@ async def test_get_config_fetches_api_config():
 
     config = await make_ha_client(handler).get_config()
     assert config["time_zone"] == "Europe/Stockholm"
+
+
+async def test_cover_services_post_service_calls():
+    calls = []
+
+    def handler(request):
+        calls.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json=[])
+
+    client = make_ha_client(handler)
+    await client.open_cover("cover.win")
+    await client.close_cover("cover.win")
+    await client.stop_cover("cover.win")
+    await client.set_cover_position("cover.win", 40)
+    assert calls == [
+        ("/api/services/cover/open_cover", {"entity_id": "cover.win"}),
+        ("/api/services/cover/close_cover", {"entity_id": "cover.win"}),
+        ("/api/services/cover/stop_cover", {"entity_id": "cover.win"}),
+        ("/api/services/cover/set_cover_position",
+         {"entity_id": "cover.win", "position": 40}),
+    ]

@@ -26,7 +26,7 @@ class FakeHAClient:
         self.fail_states = fail_states
         self.calls = []
 
-    async def get_climate_states(self):
+    async def get_states(self):
         if self.fail_states:
             raise HAError("HA unreachable")
         return self.states
@@ -39,6 +39,18 @@ class FakeHAClient:
 
     async def turn_on(self, entity_id):
         self._record(("turn_on", entity_id), entity_id)
+
+    async def open_cover(self, entity_id):
+        self._record(("open_cover", entity_id), entity_id)
+
+    async def close_cover(self, entity_id):
+        self._record(("close_cover", entity_id), entity_id)
+
+    async def stop_cover(self, entity_id):
+        self._record(("stop_cover", entity_id), entity_id)
+
+    async def set_cover_position(self, entity_id, position):
+        self._record(("set_cover_position", entity_id, position), entity_id)
 
     def _record(self, call, entity_id):
         if entity_id in self.fail_entities:

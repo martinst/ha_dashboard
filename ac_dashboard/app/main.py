@@ -90,8 +90,9 @@ async def get_state(
     ha: HAClient = Depends(get_ha_client),
     groups: list = Depends(get_groups),
 ):
-    states = await ha.get_climate_states()
-    return {"groups": build_groups(states, groups)}
+    states = await ha.get_states()
+    climate = [s for s in states if s["entity_id"].startswith("climate.")]
+    return {"groups": build_groups(climate, groups)}
 
 
 class ArmRequest(BaseModel):
