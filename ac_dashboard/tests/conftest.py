@@ -17,6 +17,17 @@ def ha_state(entity_id, state="cool", **attrs):
     return {"entity_id": entity_id, "state": state, "attributes": base}
 
 
+def cover_ha_state(entity_id, state="closed", **attrs):
+    """Build an HA cover state dict like GET /api/states returns."""
+    base = {
+        "friendly_name": entity_id.split(".")[1].replace("_", " ").title(),
+        "current_position": 0,
+        "supported_features": 15,  # OPEN(1) | CLOSE(2) | SET_POSITION(4) | STOP(8)
+    }
+    base.update(attrs)
+    return {"entity_id": entity_id, "state": state, "attributes": base}
+
+
 class FakeHAClient:
     """In-memory stand-in for HAClient; records service calls."""
 
