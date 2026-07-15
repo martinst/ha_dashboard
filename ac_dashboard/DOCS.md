@@ -1,8 +1,10 @@
-# AC Dashboard
+# Home Dashboard
 
-A simple web page for controlling your AC units (any `climate.*` entities in
-Home Assistant) — large touch targets, no HA login, made for family use on
-phones. Units are auto-discovered; you choose how to group them.
+Simple web pages for controlling your AC units (any `climate.*` entities in
+Home Assistant) and motorized windows (any `cover.*` entities, e.g. Somfy
+TaHoma via the Overkiz integration) — large touch targets, no HA login, made
+for family use on phones. Units are auto-discovered; you choose how to group
+them.
 
 ## Configuration
 
@@ -25,6 +27,23 @@ Entity IDs are listed in HA under **Settings → Devices & Services → Entities
 on the page under an "Ungrouped" section.
 
 Restart the app after changing the configuration.
+
+## Windows
+
+The **Windows** page (top navigation) controls `cover.*` entities: open /
+stop / close buttons, and a 0–100 % position slider for windows that support
+it. Configure window groups the same way as AC groups:
+
+```yaml
+window_groups:
+  - name: Living room
+    entities:
+      - cover.living_left
+      - cover.living_right
+```
+
+Any cover entity not listed still appears under "Ungrouped" on the Windows
+page.
 
 ## Schedule presets
 
@@ -50,6 +69,20 @@ otherwise it is skipped (a log line records this).
 When arming you can pick **Once** (fires once, then disarms) or **Repeat**
 (pick weekdays; fires on each selected day at the chosen time until
 cancelled).
+
+Window schedules work the same way with `window_presets` (shown on the
+Windows page's Schedule tab):
+
+```yaml
+window_presets:
+  - name: Night close
+    entities:
+      - cover.living_left
+      - cover.living_right
+    action: close       # open | close — or omit if position is given
+    position: 20        # optional 0–100; wins over action when both are set
+    time: "22:00"
+```
 
 ## Usage
 
@@ -90,5 +123,5 @@ standalone like an app (icon and manifest are built in).
 ## Security
 
 The dashboard has **no authentication** — anyone who can reach port 8088 can
-control your AC units. Keep it on your LAN/VPN (e.g. the Tailscale app).
+control your AC units and windows. Keep it on your LAN/VPN (e.g. the Tailscale app).
 Do **not** port-forward it to the internet.

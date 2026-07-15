@@ -1,0 +1,7 @@
+# Copy to window_groups.yaml and edit. Cover entities not listed here still
+# appear under an "Ungrouped" section on the Windows page.
+groups:
+  - name: Living room
+    entities:
+      - cover.living_left
+      - cover.living_right

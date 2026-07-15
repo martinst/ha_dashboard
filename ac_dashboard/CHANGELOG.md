@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+- Renamed to **Home Dashboard** — now controls motorized windows as well as AC
+- New **Windows** page: open/stop/close, position slider, window groups
+  (`window_groups` option)
+- Window schedule presets (`window_presets` option) with Once/Repeat arming,
+  sharing the scheduler with AC presets
+- Existing AC configuration and armed schedules carry over unchanged
+
 ## 1.3.0
 
 - Repeat mode: arm a preset to fire on chosen weekdays at a chosen time

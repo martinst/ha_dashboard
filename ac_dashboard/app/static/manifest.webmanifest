@@ -1,6 +1,6 @@
 {
-  "name": "AC Control",
-  "short_name": "AC",
+  "name": "Home Dashboard",
+  "short_name": "Home",
   "display": "standalone",
   "start_url": "/",
   "background_color": "#f2f4f7",

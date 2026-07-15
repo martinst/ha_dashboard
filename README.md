@@ -1,6 +1,7 @@
-# AC Dashboard — Home Assistant App
+# Home Dashboard — Home Assistant App
 
-A simple web page for controlling AC units configured in Home Assistant.
+Simple web pages for controlling AC units (climate entities) and motorized
+windows (cover entities, e.g. Somfy TaHoma) configured in Home Assistant.
 Stripped-down controls with big touch targets, no HA login — made for family
 use on phones, reachable over your LAN or VPN (e.g. the Tailscale app).
 
@@ -12,7 +13,7 @@ containing one app: [`ac_dashboard`](ac_dashboard/).
 1. In Home Assistant: **Settings → Apps** (called Add-ons in older HA versions)
 2. Top-right **⋮ menu → Repositories**, add:
    `https://github.com/martinst/ha_dashboard`
-3. Refresh the store, open **AC Dashboard**, click **Install**
+3. Refresh the store, open **Home Dashboard**, click **Install**
    (the image builds on the device — takes a few minutes on a Pi)
 4. In the app's **Configuration** tab, define your groups
    (see [DOCS](ac_dashboard/DOCS.md) for the format)

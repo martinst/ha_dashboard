@@ -1,0 +1,9 @@
+# Local development only — the add-on generates window_presets.yaml from its options.
+presets:
+  - name: Night close
+    entities:
+      - cover.living_left
+      - cover.living_right
+    action: close       # open | close — or omit if position is given
+    position: 20        # optional 0–100; wins over action when both are set
+    time: "22:00"
