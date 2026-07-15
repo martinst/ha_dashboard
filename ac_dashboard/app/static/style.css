@@ -243,3 +243,40 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: var(--accent-cool);
   color: #fff;
 }
+
+/* ---- page navigation (AC | Windows) ---- */
+
+.pages { display: flex; gap: 6px; }
+.page-link {
+  padding: 8px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+.page-link.active { background: #e3e7ee; color: var(--text); }
+
+/* ---- windows page ---- */
+
+.cover-state { color: var(--muted); }
+
+.card[data-state="open"],
+.card[data-state="opening"] { border-left-color: var(--accent-cool); }
+.card[data-state="closing"] { border-left-color: var(--accent-heat); }
+
+.cover-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cover-btns .cover-btn {
+  flex: 1;
+  padding: 12px 0;
+  font-weight: 600;
+}
+
+input[type="range"].position {
+  width: 100%;
+  margin: 14px 0 4px;
+  accent-color: var(--accent-cool);
+}
