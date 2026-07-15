@@ -250,3 +250,121 @@ def test_cancel_weekly_arm(make_client, tmp_path):
     resp = client.post("/api/schedule/evening_warmth/cancel")
     assert resp.status_code == 200
     assert client.get("/api/schedule").json()["presets"][0]["armed"] is None
+
+
+from app.config import CoverPreset
+from tests.conftest import cover_ha_state
+
+COVER_GROUPS = [Group(name="Living", entities=["cover.left", "cover.right"])]
+
+
+def test_get_state_includes_cover_groups(make_client):
+    fake = FakeHAClient(states=[
+        ha_state("climate.bedroom"),
+        cover_ha_state("cover.left", state="open", current_position=40),
+    ])
+    client = make_client(
+        fake,
+        [Group(name="Upstairs", entities=["climate.bedroom"])],
+        cover_groups=[Group(name="Living", entities=["cover.left"])],
+    )
+    body = client.get("/api/state").json()
+    assert body["groups"][0]["units"][0]["entity_id"] == "climate.bedroom"
+    assert body["cover_groups"][0]["name"] == "Living"
+    assert body["cover_groups"][0]["units"][0]["position"] == 40
+
+
+def test_set_cover_action(make_client):
+    fake = FakeHAClient()
+    client = make_client(fake)
+    resp = client.post("/api/covers/cover.left/set", json={"action": "open"})
+    assert resp.status_code == 200
+    assert fake.calls == [("open_cover", "cover.left")]
+
+
+def test_set_cover_position(make_client):
+    fake = FakeHAClient()
+    client = make_client(fake)
+    resp = client.post("/api/covers/cover.left/set", json={"position": 40})
+    assert resp.status_code == 200
+    assert fake.calls == [("set_cover_position", "cover.left", 40)]
+
+
+def test_set_cover_empty_body_is_422(make_client):
+    resp = make_client(FakeHAClient()).post("/api/covers/cover.left/set", json={})
+    assert resp.status_code == 422
+
+
+def test_set_cover_on_climate_entity_is_400(make_client):
+    resp = make_client(FakeHAClient()).post(
+        "/api/covers/climate.bedroom/set", json={"action": "open"}
+    )
+    assert resp.status_code == 400
+
+
+def test_set_cover_group_fans_out(make_client):
+    fake = FakeHAClient()
+    client = make_client(fake, cover_groups=COVER_GROUPS)
+    resp = client.post("/api/cover-groups/Living/set", json={"action": "close"})
+    assert resp.status_code == 200
+    assert resp.json() == {"total": 2, "succeeded": 2, "failed": []}
+    assert sorted(fake.calls) == [
+        ("close_cover", "cover.left"),
+        ("close_cover", "cover.right"),
+    ]
+
+
+def test_set_cover_group_partial_failure(make_client):
+    fake = FakeHAClient(fail_entities=["cover.right"])
+    client = make_client(fake, cover_groups=COVER_GROUPS)
+    resp = client.post("/api/cover-groups/Living/set", json={"action": "open"})
+    assert resp.json() == {"total": 2, "succeeded": 1, "failed": ["cover.right"]}
+
+
+def test_set_cover_group_unknown_is_404(make_client):
+    client = make_client(FakeHAClient(), cover_groups=COVER_GROUPS)
+    resp = client.post("/api/cover-groups/Kitchen/set", json={"action": "open"})
+    assert resp.status_code == 404
+
+
+COVER_SCHED_PRESET = CoverPreset(
+    name="Night close", entities=["cover.left"], action="close", time="22:00"
+)
+
+
+def make_mixed_sched(tmp_path, fake_ha):
+    return Scheduler(
+        [SCHED_PRESET, COVER_SCHED_PRESET],
+        fake_ha,
+        tmp_path / "schedules.json",
+        TZ,
+        now=lambda: datetime(2026, 6, 7, 12, 0, tzinfo=TZ),
+    )
+
+
+def test_schedule_serializes_domain_fields(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_mixed_sched(tmp_path, fake))
+    presets = {p["id"]: p for p in client.get("/api/schedule").json()["presets"]}
+    climate = presets["evening_warmth"]
+    assert climate["domain"] == "climate"
+    assert climate["mode"] == "heat"
+    assert climate["temperature"] == 23.0
+    cover = presets["cover:night_close"]
+    assert cover["domain"] == "cover"
+    assert cover["action"] == "close"
+    assert cover["position"] is None
+    assert "mode" not in cover
+
+
+def test_arm_and_cancel_cover_preset(make_client, tmp_path):
+    fake = FakeHAClient()
+    client = make_client(fake, scheduler=make_mixed_sched(tmp_path, fake))
+    resp = client.post(
+        "/api/schedule/cover:night_close/arm",
+        json={"date": "2026-06-08", "time": "22:00"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["fires_at"].startswith("2026-06-08T22:00")
+    resp = client.post("/api/schedule/cover:night_close/cancel")
+    assert resp.status_code == 200

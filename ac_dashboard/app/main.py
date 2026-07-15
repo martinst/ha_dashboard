@@ -7,11 +7,11 @@ from pydantic import BaseModel, model_validator
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.commands import SetCommand, apply_command
-from app.config import Settings, load_groups, load_presets
+from app.commands import CommandError, CoverCommand, SetCommand, apply_command
+from app.config import Settings, load_cover_presets, load_groups, load_presets
 from app.ha_client import HAClient, HAError
 from app.scheduler import Scheduler, fetch_timezone
-from app.state import build_groups
+from app.state import build_cover_groups, build_groups
 
 
 @asynccontextmanager
@@ -19,9 +19,13 @@ async def lifespan(app: FastAPI):
     settings = Settings()
     app.state.ha_client = HAClient(settings.ha_url, settings.ha_token)
     app.state.groups = load_groups()
+    app.state.cover_groups = load_groups("window_groups.yaml")
     tz = await fetch_timezone(app.state.ha_client)
     app.state.scheduler = Scheduler(
-        load_presets(), app.state.ha_client, settings.schedules_path, tz
+        load_presets() + load_cover_presets(),
+        app.state.ha_client,
+        settings.schedules_path,
+        tz,
     )
     app.state.scheduler.start()
     yield
@@ -40,6 +44,10 @@ def get_groups(request: Request) -> list:
     return request.app.state.groups
 
 
+def get_cover_groups(request: Request) -> list:
+    return request.app.state.cover_groups
+
+
 def get_scheduler(request: Request) -> Scheduler:
     return request.app.state.scheduler
 
@@ -47,6 +55,11 @@ def get_scheduler(request: Request) -> Scheduler:
 @app.exception_handler(HAError)
 async def ha_error_handler(request: Request, exc: HAError) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+@app.exception_handler(CommandError)
+async def command_error_handler(request: Request, exc: CommandError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.post("/api/units/{entity_id}/set")
@@ -59,6 +72,23 @@ async def set_unit(
     return {"ok": True}
 
 
+async def _fan_out(ha: HAClient, entities: list[str], cmd) -> dict:
+    results = await asyncio.gather(
+        *(apply_command(ha, entity_id, cmd) for entity_id in entities),
+        return_exceptions=True,
+    )
+    failed = [
+        entity_id
+        for entity_id, result in zip(entities, results)
+        if isinstance(result, Exception)
+    ]
+    return {
+        "total": len(entities),
+        "succeeded": len(entities) - len(failed),
+        "failed": failed,
+    }
+
+
 @app.post("/api/groups/{name}/set")
 async def set_group(
     name: str,
@@ -69,30 +99,45 @@ async def set_group(
     group = next((g for g in groups if g.name == name), None)
     if group is None:
         raise HTTPException(status_code=404, detail=f"Unknown group: {name}")
-    results = await asyncio.gather(
-        *(apply_command(ha, entity_id, cmd) for entity_id in group.entities),
-        return_exceptions=True,
-    )
-    failed = [
-        entity_id
-        for entity_id, result in zip(group.entities, results)
-        if isinstance(result, Exception)
-    ]
-    return {
-        "total": len(group.entities),
-        "succeeded": len(group.entities) - len(failed),
-        "failed": failed,
-    }
+    return await _fan_out(ha, group.entities, cmd)
+
+
+@app.post("/api/covers/{entity_id}/set")
+async def set_cover(
+    entity_id: str,
+    cmd: CoverCommand,
+    ha: HAClient = Depends(get_ha_client),
+):
+    await apply_command(ha, entity_id, cmd)
+    return {"ok": True}
+
+
+@app.post("/api/cover-groups/{name}/set")
+async def set_cover_group(
+    name: str,
+    cmd: CoverCommand,
+    ha: HAClient = Depends(get_ha_client),
+    groups: list = Depends(get_cover_groups),
+):
+    group = next((g for g in groups if g.name == name), None)
+    if group is None:
+        raise HTTPException(status_code=404, detail=f"Unknown group: {name}")
+    return await _fan_out(ha, group.entities, cmd)
 
 
 @app.get("/api/state")
 async def get_state(
     ha: HAClient = Depends(get_ha_client),
     groups: list = Depends(get_groups),
+    cover_groups: list = Depends(get_cover_groups),
 ):
     states = await ha.get_states()
     climate = [s for s in states if s["entity_id"].startswith("climate.")]
-    return {"groups": build_groups(climate, groups)}
+    covers = [s for s in states if s["entity_id"].startswith("cover.")]
+    return {
+        "groups": build_groups(climate, groups),
+        "cover_groups": build_cover_groups(covers, cover_groups),
+    }
 
 
 class ArmRequest(BaseModel):
@@ -108,24 +153,26 @@ class ArmRequest(BaseModel):
 
 
 def serialize_schedule(scheduler: Scheduler) -> dict:
-    return {
-        "presets": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "entities": p.entities,
-                "mode": p.mode,
-                "temperature": p.temperature,
-                "time": p.time,
-                "armed": (
-                    scheduler.armed[p.id].to_json()
-                    if p.id in scheduler.armed
-                    else None
-                ),
-            }
-            for p in scheduler.presets.values()
-        ]
-    }
+    presets = []
+    for p in scheduler.presets.values():
+        entry = {
+            "id": p.id,
+            "name": p.name,
+            "entities": p.entities,
+            "domain": p.domain,
+            "time": p.time,
+            "armed": (
+                scheduler.armed[p.id].to_json() if p.id in scheduler.armed else None
+            ),
+        }
+        if p.domain == "climate":
+            entry["mode"] = p.mode
+            entry["temperature"] = p.temperature
+        else:
+            entry["action"] = p.action
+            entry["position"] = p.position
+        presets.append(entry)
+    return {"presets": presets}
 
 
 @app.get("/api/schedule")
