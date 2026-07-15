@@ -105,3 +105,72 @@ def test_preset_id_strips_url_unsafe_characters():
 def test_preset_name_without_alphanumerics_raises():
     with pytest.raises(ValueError, match="letter or digit"):
         Preset(name="!!!", entities=["climate.x"], mode="cool", time="08:00")
+
+
+from app.commands import CoverCommand, SetCommand
+from app.config import CoverPreset, load_cover_presets
+
+
+def test_load_cover_presets_parses_yaml(tmp_path):
+    f = tmp_path / "window_presets.yaml"
+    f.write_text(
+        "presets:\n"
+        "  - name: Night close\n"
+        "    entities: [cover.living_left, cover.living_right]\n"
+        "    action: close\n"
+        "    time: '22:00'\n"
+    )
+    (p,) = load_cover_presets(f)
+    assert p.id == "cover:night_close"
+    assert p.entities == ["cover.living_left", "cover.living_right"]
+    assert p.action == "close"
+    assert p.position is None
+    assert p.time == "22:00"
+    assert p.domain == "cover"
+
+
+def test_load_cover_presets_missing_file_returns_empty(tmp_path):
+    assert load_cover_presets(tmp_path / "nope.yaml") == []
+
+
+def test_cover_preset_requires_action_or_position():
+    with pytest.raises(ValueError, match="action and/or position"):
+        CoverPreset(name="X", entities=["cover.x"], time="18:00")
+
+
+def test_cover_preset_rejects_stop_action():
+    with pytest.raises(ValueError, match="open or close"):
+        CoverPreset(name="X", entities=["cover.x"], action="stop", time="18:00")
+
+
+def test_cover_preset_rejects_position_out_of_range():
+    with pytest.raises(ValueError, match="0-100"):
+        CoverPreset(name="X", entities=["cover.x"], position=101, time="18:00")
+
+
+def test_cover_preset_id_namespaced_away_from_climate():
+    climate = Preset(name="Night", entities=["climate.x"], mode="off", time="22:00")
+    cover = CoverPreset(name="Night", entities=["cover.x"], action="close", time="22:00")
+    assert climate.id == "night"
+    assert cover.id == "cover:night"
+
+
+def test_duplicate_cover_preset_names_raise(tmp_path):
+    f = tmp_path / "window_presets.yaml"
+    f.write_text(
+        "presets:\n"
+        "  - {name: Same, entities: [cover.a], action: open, time: '08:00'}\n"
+        "  - {name: same, entities: [cover.b], action: close, time: '09:00'}\n"
+    )
+    with pytest.raises(ValueError, match="Duplicate preset"):
+        load_cover_presets(f)
+
+
+def test_preset_command_builds_domain_command():
+    climate = Preset(
+        name="N", entities=["climate.x"], mode="heat", temperature=23.0, time="18:00"
+    )
+    cover = CoverPreset(name="N", entities=["cover.x"], position=20, time="18:00")
+    assert climate.domain == "climate"
+    assert climate.command() == SetCommand(mode="heat", temperature=23.0)
+    assert cover.command() == CoverCommand(position=20)

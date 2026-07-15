@@ -1,9 +1,12 @@
 import re
 from pathlib import Path
+from typing import ClassVar
 
 import yaml
 from pydantic import BaseModel, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.commands import CoverCommand, SetCommand
 
 
 class Group(BaseModel):
@@ -46,21 +49,66 @@ class Preset(BaseModel):
     def id(self) -> str:
         return _slug(self.name)
 
+    domain: ClassVar[str] = "climate"
 
-def load_presets(path: str | Path = "presets.yaml") -> list[Preset]:
-    path = Path(path)
+    def command(self) -> SetCommand:
+        return SetCommand(mode=self.mode, temperature=self.temperature)
+
+
+class CoverPreset(BaseModel):
+    name: str
+    entities: list[str]
+    action: str | None = None
+    position: int | None = None
+    time: str
+
+    domain: ClassVar[str] = "cover"
+
+    @model_validator(mode="after")
+    def validate_preset(self):
+        if not self.entities:
+            raise ValueError("entities must be non-empty")
+        if not _slug(self.name):
+            raise ValueError("name must contain at least one letter or digit")
+        if self.action is None and self.position is None:
+            raise ValueError("provide action and/or position")
+        if self.action is not None and self.action not in ("open", "close"):
+            raise ValueError(f"action must be open or close, got {self.action!r}")
+        if self.position is not None and not 0 <= self.position <= 100:
+            raise ValueError(f"position must be 0-100, got {self.position}")
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", self.time):
+            raise ValueError(f"time must be HH:MM, got {self.time!r}")
+        return self
+
+    @property
+    def id(self) -> str:
+        return f"cover:{_slug(self.name)}"
+
+    def command(self) -> CoverCommand:
+        return CoverCommand(action=self.action, position=self.position)
+
+
+def _load_preset_file(path: Path, model, label: str) -> list:
     if not path.exists():
         return []
     data = yaml.safe_load(path.read_text()) or {}
     try:
-        presets = [Preset(**p) for p in data.get("presets", [])]
+        presets = [model(**p) for p in data.get("presets", [])]
     except (TypeError, ValidationError) as exc:
-        raise ValueError(f"Invalid presets.yaml ({path}): {exc}") from exc
+        raise ValueError(f"Invalid {label} ({path}): {exc}") from exc
     ids = [p.id for p in presets]
     duplicates = sorted({i for i in ids if ids.count(i) > 1})
     if duplicates:
         raise ValueError(f"Duplicate preset ids in {path}: {duplicates}")
     return presets
+
+
+def load_presets(path: str | Path = "presets.yaml") -> list[Preset]:
+    return _load_preset_file(Path(path), Preset, "presets.yaml")
+
+
+def load_cover_presets(path: str | Path = "window_presets.yaml") -> list[CoverPreset]:
+    return _load_preset_file(Path(path), CoverPreset, "window_presets.yaml")
 
 
 def load_groups(path: str | Path = "groups.yaml") -> list[Group]:
