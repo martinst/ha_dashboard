@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0
+
+- **Outdoor / Indoor temperature** strip at the top of both pages, read from
+  an Ecowitt weather console (or any HA temperature sensors)
+- Sensors are auto-detected (`sensor.*_outdoor_temperature` /
+  `sensor.*_indoor_temperature`); override with the new `outdoor_sensor` /
+  `indoor_sensor` options
+
 ## 1.4.3
 
 - Fix: version-stamped asset URLs (`style.css?v=…`, scripts) so browsers that

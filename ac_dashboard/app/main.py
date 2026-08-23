@@ -8,10 +8,16 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.commands import CommandError, CoverCommand, SetCommand, apply_command
-from app.config import Settings, load_cover_presets, load_groups, load_presets
+from app.config import (
+    SensorConfig,
+    Settings,
+    load_cover_presets,
+    load_groups,
+    load_presets,
+)
 from app.ha_client import HAClient, HAError
 from app.scheduler import Scheduler, fetch_timezone
-from app.state import build_cover_groups, build_groups
+from app.state import build_cover_groups, build_groups, build_temperatures
 
 
 @asynccontextmanager
@@ -20,6 +26,7 @@ async def lifespan(app: FastAPI):
     app.state.ha_client = HAClient(settings.ha_url, settings.ha_token)
     app.state.groups = load_groups()
     app.state.cover_groups = load_groups("window_groups.yaml")
+    app.state.sensor_config = settings.sensor_config()
     tz = await fetch_timezone(app.state.ha_client)
     app.state.scheduler = Scheduler(
         load_presets() + load_cover_presets(),
@@ -46,6 +53,10 @@ def get_groups(request: Request) -> list:
 
 def get_cover_groups(request: Request) -> list:
     return request.app.state.cover_groups
+
+
+def get_sensor_config(request: Request) -> SensorConfig:
+    return request.app.state.sensor_config
 
 
 def get_scheduler(request: Request) -> Scheduler:
@@ -130,13 +141,18 @@ async def get_state(
     ha: HAClient = Depends(get_ha_client),
     groups: list = Depends(get_groups),
     cover_groups: list = Depends(get_cover_groups),
+    sensors: SensorConfig = Depends(get_sensor_config),
 ):
     states = await ha.get_states()
     climate = [s for s in states if s["entity_id"].startswith("climate.")]
     covers = [s for s in states if s["entity_id"].startswith("cover.")]
+    sensor_states = [s for s in states if s["entity_id"].startswith("sensor.")]
     return {
         "groups": build_groups(climate, groups),
         "cover_groups": build_cover_groups(covers, cover_groups),
+        "temperatures": build_temperatures(
+            sensor_states, sensors.outdoor, sensors.indoor
+        ),
     }
 
 

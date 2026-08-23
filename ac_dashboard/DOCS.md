@@ -2,9 +2,10 @@
 
 Simple web pages for controlling your AC units (any `climate.*` entities in
 Home Assistant) and motorized windows (any `cover.*` entities, e.g. Somfy
-TaHoma via the Overkiz integration) — large touch targets, no HA login, made
-for family use on phones. Units are auto-discovered; you choose how to group
-them.
+TaHoma via the Overkiz integration), with the outdoor and indoor temperature
+from a weather station (e.g. Ecowitt) at the top — large touch targets, no HA
+login, made for family use on phones. Units are auto-discovered; you choose
+how to group them.
 
 ## Configuration
 
@@ -44,6 +45,22 @@ window_groups:
 
 Any cover entity not listed still appears under "Ungrouped" on the Windows
 page.
+
+## Outdoor / indoor temperature
+
+Both pages show an **Outdoor** and **Indoor** temperature tile at the top. By
+default the app looks for Ecowitt-style sensors — the first
+`sensor.*_outdoor_temperature` and `sensor.*_indoor_temperature` entities with
+device class *temperature* (the Ecowitt integration creates these for a
+WN1980C/GW-series console). To use other sensors, set them explicitly:
+
+```yaml
+outdoor_sensor: sensor.garden_probe_temperature
+indoor_sensor: sensor.hallway_temperature
+```
+
+A tile is hidden when no sensor is configured or found, and dimmed when the
+sensor is unavailable.
 
 ## Schedule presets
 

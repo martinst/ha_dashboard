@@ -11,6 +11,10 @@ cd /opt/ac_dashboard
 
 export SCHEDULES_PATH=/data/schedules.json
 
+# Outdoor/indoor temperature sensors (empty = auto-detect Ecowitt-style names).
+export OUTDOOR_SENSOR="$(bashio::config 'outdoor_sensor' '')"
+export INDOOR_SENSOR="$(bashio::config 'indoor_sensor' '')"
+
 # Convert the add-on options (Configuration tab) into the yaml config files.
 python3 - <<'PY'
 import json

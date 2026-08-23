@@ -14,12 +14,30 @@ class Group(BaseModel):
     entities: list[str]
 
 
+class SensorConfig(BaseModel):
+    """Temperature sensors shown at the top of every page.
+
+    Empty means auto-detect (Ecowitt-style *_outdoor_temperature /
+    *_indoor_temperature sensors)."""
+
+    outdoor: str | None = None
+    indoor: str | None = None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     ha_url: str = "http://localhost:8123"
     ha_token: str = ""
     schedules_path: str = "schedules.json"
+    outdoor_sensor: str = ""
+    indoor_sensor: str = ""
+
+    def sensor_config(self) -> SensorConfig:
+        return SensorConfig(
+            outdoor=self.outdoor_sensor.strip() or None,
+            indoor=self.indoor_sensor.strip() or None,
+        )
 
 
 def _slug(name: str) -> str:

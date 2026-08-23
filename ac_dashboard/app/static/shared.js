@@ -63,6 +63,36 @@ function debounce(key, fn) {
   timers[key] = setTimeout(fn, DEBOUNCE_MS);
 }
 
+// ---- outdoor / indoor temperature strip ----
+
+// `temps` is the /api/state "temperatures" object: {outdoor, indoor}, each a
+// sensor ({temp, unit, available}) or null when no sensor is configured/found.
+function renderTemperatures(temps) {
+  const strip = document.getElementById("temps");
+  const slots = [["outdoor", "Outdoor"], ["indoor", "Indoor"]]
+    .filter(([key]) => temps && temps[key]);
+  strip.classList.toggle("hidden", !slots.length);
+  strip.replaceChildren(
+    ...slots.map(([key, label]) => {
+      const sensor = temps[key];
+      const tile = el("div", `temp-tile ${key}`);
+      if (!sensor.available) tile.classList.add("unavailable");
+      tile.title = sensor.name;
+      tile.append(
+        el("span", "temp-label", label),
+        el("span", "temp-value", sensor.temp != null
+          ? `${formatTemp(sensor.temp)}${sensor.unit ?? "°"}`
+          : "–")
+      );
+      return tile;
+    })
+  );
+}
+
+function formatTemp(value) {
+  return (Math.round(value * 10) / 10).toFixed(1);
+}
+
 // ---- schedule tab ----
 
 function mergeSchedule(fresh) {

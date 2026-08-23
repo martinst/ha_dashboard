@@ -127,6 +127,7 @@ function render() {
   document
     .getElementById("groups")
     .replaceChildren(...state.groups.map(renderGroup));
+  renderTemperatures(state.temperatures);
   renderSchedule();
 }
 

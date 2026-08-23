@@ -1,7 +1,7 @@
 name: Home Dashboard
-version: "1.4.3"
+version: "1.5.0"
 slug: ac_dashboard
-description: Simple web pages for controlling AC units and motorized windows — no HA login needed
+description: Simple web pages for AC units, motorized windows and outdoor/indoor temperature — no HA login needed
 url: https://github.com/martinst/ha_dashboard
 arch:
   - aarch64
@@ -23,6 +23,8 @@ options:
   presets: []
   window_groups: []
   window_presets: []
+  outdoor_sensor: ""
+  indoor_sensor: ""
   ssl: false
   certfile: fullchain.pem
   keyfile: privkey.pem
@@ -49,6 +51,8 @@ schema:
       action: str?
       position: int?
       time: str
+  outdoor_sensor: str?
+  indoor_sensor: str?
   ssl: bool
   certfile: str?
   keyfile: str?

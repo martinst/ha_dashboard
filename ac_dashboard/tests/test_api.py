@@ -397,3 +397,39 @@ def test_static_asset_links_are_version_busted():
         html = (root / "app" / "static" / page).read_text()
         for asset in assets:
             assert f'"{asset}?v={version}"' in html, f"{page}: {asset}"
+
+
+from app.config import SensorConfig
+from tests.conftest import sensor_ha_state
+
+
+def test_get_state_includes_temperatures(make_client):
+    fake = FakeHAClient(states=[
+        ha_state("climate.bedroom"),
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+        sensor_ha_state("sensor.wn1980c_indoor_temperature", state="23.1"),
+    ])
+    client = make_client(fake)
+    body = client.get("/api/state").json()
+    assert body["temperatures"]["outdoor"]["temp"] == 11.9
+    assert body["temperatures"]["indoor"]["temp"] == 23.1
+
+
+def test_get_state_uses_configured_sensors(make_client):
+    fake = FakeHAClient(states=[
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+        sensor_ha_state("sensor.garden_probe", state="10.2"),
+        sensor_ha_state("sensor.hall", state="20.0"),
+    ])
+    client = make_client(
+        fake, sensors=SensorConfig(outdoor="sensor.garden_probe", indoor="sensor.hall")
+    )
+    body = client.get("/api/state").json()
+    assert body["temperatures"]["outdoor"]["entity_id"] == "sensor.garden_probe"
+    assert body["temperatures"]["indoor"]["entity_id"] == "sensor.hall"
+
+
+def test_get_state_temperatures_null_when_no_sensors(make_client):
+    client = make_client(FakeHAClient(states=[ha_state("climate.bedroom")]))
+    body = client.get("/api/state").json()
+    assert body["temperatures"] == {"outdoor": None, "indoor": None}

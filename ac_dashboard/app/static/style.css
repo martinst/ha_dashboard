@@ -157,6 +157,42 @@ button:disabled { opacity: 0.4; cursor: default; }
   width: 100%;
 }
 
+/* ---- outdoor / indoor temperature strip ---- */
+
+.temps {
+  display: flex;
+  gap: 10px;
+  padding: 0 12px 10px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.temps.hidden { display: none; }
+.temp-tile {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: var(--card);
+  border-radius: 14px;
+  padding: 12px 16px;
+  border-left: 6px solid var(--accent-cool);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+}
+.temp-tile.indoor { border-left-color: var(--accent-heat); }
+.temp-tile.unavailable { opacity: 0.55; }
+.temp-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.temp-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .tabs {
   display: flex;
   gap: 6px;

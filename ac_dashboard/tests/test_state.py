@@ -126,3 +126,81 @@ def test_unknown_cover_state_is_available():
     unit = result[0]["units"][0]
     assert unit["available"] is True
     assert unit["state"] == "unknown"
+
+
+from app.state import build_temperatures
+
+from tests.conftest import sensor_ha_state
+
+
+def test_temperature_fields_mapped_from_sensor_state():
+    states = [sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9")]
+    result = build_temperatures(
+        states, outdoor="sensor.wn1980c_outdoor_temperature", indoor=None
+    )
+    assert result["outdoor"] == {
+        "entity_id": "sensor.wn1980c_outdoor_temperature",
+        "name": "Wn1980C Outdoor Temperature",
+        "temp": 11.9,
+        "unit": "°C",
+        "available": True,
+    }
+    assert result["indoor"] is None
+
+
+def test_auto_detects_ecowitt_outdoor_and_indoor_sensors():
+    # Ecowitt names its console sensors <model>_outdoor_temperature and
+    # <model>_indoor_temperature; with nothing configured we pick those up.
+    states = [
+        sensor_ha_state("sensor.kitchen_temperature"),
+        sensor_ha_state("sensor.wn1980c_indoor_temperature", state="23.1"),
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+        sensor_ha_state("sensor.wn1980c_feels_like_temperature", state="11.9"),
+    ]
+    result = build_temperatures(states, outdoor=None, indoor=None)
+    assert result["outdoor"]["entity_id"] == "sensor.wn1980c_outdoor_temperature"
+    assert result["outdoor"]["temp"] == 11.9
+    assert result["indoor"]["entity_id"] == "sensor.wn1980c_indoor_temperature"
+    assert result["indoor"]["temp"] == 23.1
+
+
+def test_auto_detect_ignores_non_temperature_sensors():
+    states = [
+        sensor_ha_state("sensor.gw_outdoor_temperature", device_class="humidity"),
+    ]
+    assert build_temperatures(states, None, None) == {"outdoor": None, "indoor": None}
+
+
+def test_configured_sensor_wins_over_auto_detect():
+    states = [
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+        sensor_ha_state("sensor.garden_probe", state="10.2"),
+    ]
+    result = build_temperatures(states, outdoor="sensor.garden_probe", indoor=None)
+    assert result["outdoor"]["entity_id"] == "sensor.garden_probe"
+    assert result["outdoor"]["temp"] == 10.2
+
+
+def test_unavailable_sensor_has_no_temp_and_is_unavailable():
+    states = [sensor_ha_state("sensor.out", state="unavailable")]
+    result = build_temperatures(states, outdoor="sensor.out", indoor=None)
+    assert result["outdoor"]["temp"] is None
+    assert result["outdoor"]["available"] is False
+
+
+def test_non_numeric_sensor_state_is_unavailable():
+    states = [sensor_ha_state("sensor.out", state="unknown")]
+    result = build_temperatures(states, outdoor="sensor.out", indoor=None)
+    assert result["outdoor"]["temp"] is None
+    assert result["outdoor"]["available"] is False
+
+
+def test_configured_sensor_missing_from_ha_shows_as_unavailable():
+    result = build_temperatures([], outdoor="sensor.gone", indoor=None)
+    assert result["outdoor"] == {
+        "entity_id": "sensor.gone",
+        "name": "Gone",
+        "temp": None,
+        "unit": None,
+        "available": False,
+    }

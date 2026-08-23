@@ -28,6 +28,17 @@ def cover_ha_state(entity_id, state="closed", **attrs):
     return {"entity_id": entity_id, "state": state, "attributes": base}
 
 
+def sensor_ha_state(entity_id, state="21.5", **attrs):
+    """Build an HA temperature sensor state dict (e.g. an Ecowitt console)."""
+    base = {
+        "friendly_name": entity_id.split(".")[1].replace("_", " ").title(),
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+    }
+    base.update(attrs)
+    return {"entity_id": entity_id, "state": state, "attributes": base}
+
+
 class FakeHAClient:
     """In-memory stand-in for HAClient; records service calls."""
 
@@ -71,21 +82,24 @@ class FakeHAClient:
 
 @pytest.fixture
 def make_client():
-    """Returns a factory: make_client(fake_ha, groups, scheduler, cover_groups)."""
+    """Returns a factory: make_client(fake_ha, groups, scheduler, cover_groups, sensors)."""
     from fastapi.testclient import TestClient
 
+    from app.config import SensorConfig
     from app.main import (
         app,
         get_cover_groups,
         get_groups,
         get_ha_client,
         get_scheduler,
+        get_sensor_config,
     )
 
-    def _make(fake_ha, groups=(), scheduler=None, cover_groups=()):
+    def _make(fake_ha, groups=(), scheduler=None, cover_groups=(), sensors=None):
         app.dependency_overrides[get_ha_client] = lambda: fake_ha
         app.dependency_overrides[get_groups] = lambda: list(groups)
         app.dependency_overrides[get_cover_groups] = lambda: list(cover_groups)
+        app.dependency_overrides[get_sensor_config] = lambda: sensors or SensorConfig()
         if scheduler is not None:
             app.dependency_overrides[get_scheduler] = lambda: scheduler
         return TestClient(app)
