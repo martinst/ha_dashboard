@@ -657,8 +657,10 @@ def test_doors_state_for_logged_in_user(make_client, tmp_path):
     assert body["user"] == "maria@example.com"
     assert body["groups"][0]["name"] == "Street"
     assert body["groups"][0]["units"] == [
-        {"entity_id": "lock.front_door", "name": "Front Door", "state": "locked", "available": True},
-        {"entity_id": "lock.garage", "name": "Garage", "state": "unlocked", "available": True},
+        {"entity_id": "lock.front_door", "name": "Front Door", "state": "locked",
+         "available": True, "supports_open": False},
+        {"entity_id": "lock.garage", "name": "Garage", "state": "unlocked",
+         "available": True, "supports_open": False},
     ]
 
 
@@ -676,8 +678,9 @@ def test_door_command_rejects_bad_action_and_wrong_domain(make_client, tmp_path)
     transport, _ = fake_google()
     client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
     login(client)
-    assert client.post("/api/doors/lock.front_door/set", json={"action": "open"}).status_code == 422
+    assert client.post("/api/doors/lock.front_door/set", json={"action": "jiggle"}).status_code == 422
     assert client.post("/api/doors/cover.win/set", json={"action": "lock"}).status_code == 400
+    assert client.post("/api/doors/cover.win/set", json={"action": "open"}).status_code == 400
 
 
 def test_door_group_lock_all(make_client, tmp_path):
@@ -721,3 +724,55 @@ def test_static_asset_links_include_doors_page():
         assert f'"{asset}?v={version}"' in html, asset
     for page in ("index.html", "windows.html", "doors.html"):
         assert 'href="/doors.html"' in (root / "app" / "static" / page).read_text(), page
+
+
+# ---- momentary Open via MQTT -------------------------------------------------
+
+from tests.conftest import lock_discovery
+
+
+def test_doors_state_reports_supports_open(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS)
+    fake.mqtt_retained = [lock_discovery("abc", "Front Door")]  # no config for Garage
+    client = make_client(fake, auth=make_auth(tmp_path, transport))
+    login(client)
+    units = client.get("/api/doors").json()["groups"][0]["units"]
+    by_id = {u["entity_id"]: u for u in units}
+    assert by_id["lock.front_door"]["supports_open"] is True
+    assert by_id["lock.garage"]["supports_open"] is False
+
+
+def test_open_door_publishes_open_to_command_topic(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS)
+    fake.mqtt_retained = [lock_discovery("abc", "Front Door")]
+    client = make_client(fake, auth=make_auth(tmp_path, transport))
+    login(client)
+    resp = client.post("/api/doors/lock.front_door/set", json={"action": "open"})
+    assert resp.status_code == 200
+    assert fake.calls == [("mqtt_publish", "inception/lock/abc/set", "Open")]
+
+
+def test_open_door_without_topic_is_409(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS)
+    client = make_client(fake, auth=make_auth(tmp_path, transport))
+    login(client)
+    resp = client.post("/api/doors/lock.garage/set", json={"action": "open"})
+    assert resp.status_code == 409
+    assert fake.calls == []
+
+
+def test_open_unknown_door_is_404(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(states=LOCKS), auth=make_auth(tmp_path, transport))
+    login(client)
+    assert client.post("/api/doors/lock.nope/set", json={"action": "open"}).status_code == 404
+
+
+def test_door_group_open_all_is_refused(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), door_groups=DOOR_GROUPS, auth=make_auth(tmp_path, transport))
+    login(client)
+    assert client.post("/api/door-groups/Street/set", json={"action": "open"}).status_code == 400

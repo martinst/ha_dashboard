@@ -38,8 +38,8 @@ class LockCommand(BaseModel):
 
     @model_validator(mode="after")
     def validate_command(self):
-        if self.action not in ("lock", "unlock"):
-            raise ValueError(f"action must be lock or unlock, got {self.action!r}")
+        if self.action not in ("lock", "unlock", "open"):
+            raise ValueError(f"action must be lock, unlock or open, got {self.action!r}")
         return self
 
 
@@ -71,7 +71,10 @@ async def apply_command(
             raise CommandError(f"{entity_id} requires a lock command")
         if cmd.action == "lock":
             await ha.lock(entity_id)
-        else:
+        elif cmd.action == "unlock":
             await ha.unlock(entity_id)
+        else:
+            # Momentary "open" has no HA lock service here; see app.doors.
+            raise CommandError("open is not a Home Assistant lock action")
     else:
         raise CommandError(f"unsupported entity domain: {entity_id}")

@@ -68,20 +68,41 @@ function lockDoor(door) {
   post(`/api/doors/${door.entity_id}/set`, { action: "lock" });
 }
 
-// Unlock needs two taps within CONFIRM_MS so a pocket tap can't open a door.
-function unlockDoor(door) {
-  const now = Date.now();
-  if ((confirmUntil[door.entity_id] || 0) < now) {
-    confirmUntil[door.entity_id] = now + CONFIRM_MS;
+// Unlock and Open need two taps within CONFIRM_MS so a pocket tap can't
+// open a door. confirmUntil holds {action, until} per door.
+function armed(door, action) {
+  const c = confirmUntil[door.entity_id];
+  return c && c.action === action && c.until > Date.now();
+}
+
+function confirmThen(door, action, fn) {
+  if (!armed(door, action)) {
+    confirmUntil[door.entity_id] = { action, until: Date.now() + CONFIRM_MS };
     render();
     setTimeout(render, CONFIRM_MS + 50);
     return;
   }
   delete confirmUntil[door.entity_id];
-  door.state = "unlocking";
-  markPending(door.entity_id);
-  render();
-  post(`/api/doors/${door.entity_id}/set`, { action: "unlock" });
+  fn();
+}
+
+function unlockDoor(door) {
+  confirmThen(door, "unlock", () => {
+    door.state = "unlocking";
+    markPending(door.entity_id);
+    render();
+    post(`/api/doors/${door.entity_id}/set`, { action: "unlock" });
+  });
+}
+
+// Momentary open: Inception unlocks for the door's unlock time, then re-locks.
+function openDoor(door) {
+  confirmThen(door, "open", () => {
+    door.state = "opening";
+    markPending(door.entity_id);
+    render();
+    post(`/api/doors/${door.entity_id}/set`, { action: "open" });
+  });
 }
 
 function lockAll(group) {
@@ -144,13 +165,24 @@ function renderDoor(door) {
 
   const buttons = el("div", "lock-btns");
   const lockBtn = btn("🔒 Lock", "lock-btn", () => lockDoor(door));
-  const armed = (confirmUntil[door.entity_id] || 0) > Date.now();
-  const unlockBtn = btn(armed ? "Tap again to unlock" : "🔓 Unlock", "lock-btn unlock", () => unlockDoor(door));
-  if (armed) unlockBtn.classList.add("confirm");
-  lockBtn.disabled = unlockBtn.disabled = !door.available;
-  buttons.append(lockBtn, unlockBtn);
+  lockBtn.disabled = !door.available;
+  buttons.append(lockBtn);
+  if (door.supports_open) {
+    const openArmed = armed(door, "open");
+    const openBtn = btn(openArmed ? "Tap again to open" : "🚪 Open", "lock-btn open", () => openDoor(door));
+    if (openArmed) openBtn.classList.add("confirm");
+    openBtn.disabled = !door.available;
+    buttons.append(openBtn);
+  }
+  const unlockArmed = armed(door, "unlock");
+  const unlockBtn = btn(unlockArmed ? "Tap again to unlock" : "🔓 Unlock", "lock-btn unlock", () => unlockDoor(door));
+  if (unlockArmed) unlockBtn.classList.add("confirm");
+  unlockBtn.disabled = !door.available;
+  buttons.append(unlockBtn);
   card.append(buttons);
-  card.append(el("div", "lock-hint", "Unlock opens the door for the time set in Inception, then it re-locks."));
+  card.append(el("div", "lock-hint", door.supports_open
+    ? "Open lets someone in and re-locks by itself · Unlock stays unlocked until you Lock."
+    : "Unlock stays unlocked until you Lock."));
   return card;
 }
 

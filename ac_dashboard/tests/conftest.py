@@ -38,6 +38,21 @@ def lock_ha_state(entity_id, state="locked", **attrs):
     return {"entity_id": entity_id, "state": state, "attributes": base}
 
 
+def lock_discovery(door_id, name):
+    """(topic, payload) pair as the inception-mqtt add-on retains it."""
+    import json as _json
+    return (
+        f"homeassistant/lock/{door_id}/config",
+        _json.dumps({
+            "name": name,
+            "state_topic": f"inception/lock/{door_id}",
+            "command_topic": f"inception/lock/{door_id}/set",
+            "payload_lock": "Lock",
+            "payload_unlock": "Unlock",
+        }),
+    )
+
+
 def sensor_ha_state(entity_id, state="21.5", **attrs):
     """Build an HA temperature sensor state dict (e.g. an Ecowitt console)."""
     base = {
@@ -61,6 +76,18 @@ class FakeHAClient:
         self.fail_statistics = fail_statistics
         self.calls = []
         self.statistics_calls = []  # (statistic_ids, start, period)
+        self.mqtt_retained = []  # [(topic, payload)] returned by mqtt_subscribe_retained
+        self.fail_mqtt_subscribe = False
+        self.mqtt_subscriptions = []
+
+    async def mqtt_publish(self, topic, payload):
+        self.calls.append(("mqtt_publish", topic, payload))
+
+    async def mqtt_subscribe_retained(self, topic, wait=2.0):
+        self.mqtt_subscriptions.append(topic)
+        if self.fail_mqtt_subscribe:
+            raise HAError("not admin")
+        return list(self.mqtt_retained)
 
     async def get_statistics(self, statistic_ids, start, period):
         self.statistics_calls.append((list(statistic_ids), start, period))
@@ -154,6 +181,7 @@ def make_client():
         get_auth,
         get_cover_groups,
         get_door_groups,
+        get_door_topics,
         get_groups,
         get_ha_client,
         get_history_cache,
@@ -168,6 +196,9 @@ def make_client():
         app.dependency_overrides[get_cover_groups] = lambda: list(cover_groups)
         app.dependency_overrides[get_door_groups] = lambda: list(door_groups)
         app.dependency_overrides[get_auth] = lambda: auth
+        from app.doors import DoorTopics
+        topics = DoorTopics()
+        app.dependency_overrides[get_door_topics] = lambda: topics
         app.dependency_overrides[get_sensor_config] = lambda: sensors or SensorConfig()
         cache = {}
         app.dependency_overrides[get_history_cache] = lambda: cache

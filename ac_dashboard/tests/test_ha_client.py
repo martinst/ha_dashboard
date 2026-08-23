@@ -230,3 +230,68 @@ async def test_lock_and_unlock_post_service_calls():
         ("/api/services/lock/lock", {"entity_id": "lock.door"}),
         ("/api/services/lock/unlock", {"entity_id": "lock.door"}),
     ]
+
+
+async def test_mqtt_publish_calls_service():
+    calls = []
+
+    def handler(request):
+        calls.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json=[])
+
+    await make_ha_client(handler).mqtt_publish("inception/lock/abc/set", "Open")
+    assert calls == [
+        ("/api/services/mqtt/publish", {"topic": "inception/lock/abc/set", "payload": "Open"})
+    ]
+
+
+async def test_mqtt_subscribe_retained_collects_events_until_quiet():
+    received = {}
+
+    async def handler(ws):
+        await ws.send(json.dumps({"type": "auth_required"}))
+        received["auth"] = json.loads(await ws.recv())
+        await ws.send(json.dumps({"type": "auth_ok"}))
+        cmd = json.loads(await ws.recv())
+        received["cmd"] = cmd
+        await ws.send(json.dumps({"id": cmd["id"], "type": "result", "success": True, "result": None}))
+        for topic, payload in (("homeassistant/lock/a/config", "{\"name\":\"A\"}"),
+                               ("homeassistant/lock/b/config", "{\"name\":\"B\"}")):
+            await ws.send(json.dumps({"id": cmd["id"], "type": "event",
+                                      "event": {"topic": topic, "payload": payload, "retain": True}}))
+        await asyncio.sleep(1.5)  # stay open; client must stop on its own
+
+    server = await websockets.serve(handler, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    client = HAClient("http://ha.test", "secret-token", ws_url=f"ws://127.0.0.1:{port}/api/websocket")
+    try:
+        msgs = await client.mqtt_subscribe_retained("homeassistant/lock/#", wait=0.5)
+    finally:
+        server.close()
+        await server.wait_closed()
+        await client.aclose()
+    assert received["cmd"]["type"] == "mqtt/subscribe"
+    assert received["cmd"]["topic"] == "homeassistant/lock/#"
+    assert msgs == [("homeassistant/lock/a/config", '{"name":"A"}'),
+                    ("homeassistant/lock/b/config", '{"name":"B"}')]
+
+
+async def test_mqtt_subscribe_retained_raises_on_failure():
+    async def handler(ws):
+        await ws.send(json.dumps({"type": "auth_required"}))
+        await ws.recv()
+        await ws.send(json.dumps({"type": "auth_ok"}))
+        cmd = json.loads(await ws.recv())
+        await ws.send(json.dumps({"id": cmd["id"], "type": "result", "success": False,
+                                  "error": {"code": "unauthorized", "message": "admin only"}}))
+
+    server = await websockets.serve(handler, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    client = HAClient("http://ha.test", "secret-token", ws_url=f"ws://127.0.0.1:{port}/api/websocket")
+    try:
+        with pytest.raises(HAError):
+            await client.mqtt_subscribe_retained("homeassistant/lock/#", wait=0.2)
+    finally:
+        server.close()
+        await server.wait_closed()
+        await client.aclose()

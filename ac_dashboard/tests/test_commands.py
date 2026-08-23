@@ -72,8 +72,15 @@ from app.commands import LockCommand
 
 
 def test_lock_command_validates_action():
-    with pytest.raises(ValidationError, match="lock or unlock"):
-        LockCommand(action="open")
+    with pytest.raises(ValidationError, match="lock, unlock or open"):
+        LockCommand(action="jiggle")
+    assert LockCommand(action="open").action == "open"
+
+
+async def test_apply_command_does_not_handle_open():
+    # "open" bypasses HA's lock entity (no payload_open); the endpoint does it via MQTT.
+    with pytest.raises(CommandError):
+        await apply_command(FakeHAClient(), "lock.door", LockCommand(action="open"))
 
 
 async def test_lock_command_calls_lock_and_unlock():

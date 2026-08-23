@@ -38,6 +38,7 @@ from app.config import (
     load_groups,
     load_presets,
 )
+from app.doors import OPEN_PAYLOAD, DoorTopics
 from app.ha_client import HAClient, HAError
 from app.history import RANGES, build_history
 from app.scheduler import Scheduler, fetch_timezone
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     app.state.groups = load_groups()
     app.state.cover_groups = load_groups("window_groups.yaml")
     app.state.door_groups = load_groups("door_groups.yaml")
+    app.state.door_topics = DoorTopics()
     app.state.sensor_config = settings.sensor_config()
     app.state.auth = None
     if settings.google_client_id:
@@ -102,6 +104,10 @@ def get_cover_groups(request: Request) -> list:
 
 def get_door_groups(request: Request) -> list:
     return request.app.state.door_groups
+
+
+def get_door_topics(request: Request) -> DoorTopics:
+    return request.app.state.door_topics
 
 
 def get_auth(request: Request) -> Auth | None:
@@ -423,10 +429,16 @@ async def get_doors(
     user: str = Depends(require_user),
     ha: HAClient = Depends(get_ha_client),
     groups: list = Depends(get_door_groups),
+    topics: DoorTopics = Depends(get_door_topics),
 ):
     states = await ha.get_states()
     locks = [s for s in states if s["entity_id"].startswith("lock.")]
-    return {"user": user, "groups": build_lock_groups(locks, groups)}
+    openable = await topics.names(ha)
+    result = build_lock_groups(locks, groups)
+    for group in result:
+        for unit in group["units"]:
+            unit["supports_open"] = unit["name"] in openable
+    return {"user": user, "groups": result}
 
 
 @app.post("/api/doors/{entity_id}/set")
@@ -435,8 +447,21 @@ async def set_door(
     cmd: LockCommand,
     user: str = Depends(require_user),
     ha: HAClient = Depends(get_ha_client),
+    topics: DoorTopics = Depends(get_door_topics),
 ):
-    await apply_command(ha, entity_id, cmd)
+    if cmd.action != "open":
+        await apply_command(ha, entity_id, cmd)
+        return {"ok": True}
+    if not entity_id.startswith("lock."):
+        raise HTTPException(status_code=400, detail=f"{entity_id} is not a lock")
+    state = next((s for s in await ha.get_states() if s["entity_id"] == entity_id), None)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"Unknown door: {entity_id}")
+    name = state.get("attributes", {}).get("friendly_name", entity_id)
+    topic = await topics.command_topic(ha, name)
+    if topic is None:
+        raise HTTPException(status_code=409, detail="Open is not available for this door")
+    await ha.mqtt_publish(topic, OPEN_PAYLOAD)
     return {"ok": True}
 
 

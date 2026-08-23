@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime
 
@@ -101,6 +102,12 @@ class HAClient:
             "POST", "/api/services/lock/unlock", body={"entity_id": entity_id}
         )
 
+    async def mqtt_publish(self, topic: str, payload: str) -> None:
+        await self._request(
+            "POST", "/api/services/mqtt/publish",
+            body={"topic": topic, "payload": payload},
+        )
+
     async def get_statistics(
         self, statistic_ids: list[str], start: datetime, period: str
     ) -> dict[str, list[dict]]:
@@ -109,7 +116,6 @@ class HAClient:
         Returns {statistic_id: [{start, end, mean, min, max}, ...]} with
         start/end as epoch milliseconds."""
         command = {
-            "id": 1,
             "type": "recorder/statistics_during_period",
             "start_time": start.isoformat(),
             "statistic_ids": list(statistic_ids),
@@ -119,13 +125,41 @@ class HAClient:
         try:
             async with websockets.connect(self.ws_url, open_timeout=10) as ws:
                 await self._ws_auth(ws)
-                await ws.send(json.dumps(command))
-                reply = json.loads(await ws.recv())
+                reply = await self._ws_command(ws, command)
         except (OSError, websockets.WebSocketException, ValueError, TimeoutError) as exc:
             raise HAError(f"Home Assistant websocket failed: {exc}") from exc
-        if not reply.get("success"):
-            raise HAError(f"Home Assistant statistics failed: {reply.get('error')}")
         return reply.get("result") or {}
+
+    async def mqtt_subscribe_retained(
+        self, topic: str, wait: float = 2.0
+    ) -> list[tuple[str, str]]:
+        """Collect the retained messages for a topic filter (mqtt/subscribe).
+
+        The broker replays retained messages immediately on subscribe; we
+        gather until `wait` seconds pass without a new message."""
+        messages: list[tuple[str, str]] = []
+        try:
+            async with websockets.connect(self.ws_url, open_timeout=10) as ws:
+                await self._ws_auth(ws)
+                await self._ws_command(ws, {"type": "mqtt/subscribe", "topic": topic})
+                while True:
+                    try:
+                        msg = json.loads(await asyncio.wait_for(ws.recv(), wait))
+                    except asyncio.TimeoutError:
+                        break
+                    if msg.get("type") == "event":
+                        event = msg.get("event") or {}
+                        messages.append((event.get("topic", ""), event.get("payload", "")))
+        except (OSError, websockets.WebSocketException, ValueError, TimeoutError) as exc:
+            raise HAError(f"Home Assistant websocket failed: {exc}") from exc
+        return messages
+
+    async def _ws_command(self, ws, command: dict) -> dict:
+        await ws.send(json.dumps({"id": 1, **command}))
+        reply = json.loads(await ws.recv())
+        if not reply.get("success"):
+            raise HAError(f"Home Assistant {command['type']} failed: {reply.get('error')}")
+        return reply
 
     async def _ws_auth(self, ws) -> None:
         hello = json.loads(await ws.recv())

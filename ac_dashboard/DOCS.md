@@ -50,11 +50,19 @@ page.
 
 The **Doors** page controls `lock.*` entities — for example doors and gates
 from an Inner Range Inception system exposed through the *inception-mqtt*
-add-on. Each card shows the lock state and has **Lock** and **Unlock**
-buttons (Unlock asks for a second tap; with inception-mqtt it triggers the
-door's timed "Open", after which the door re-locks itself). Optional groups
-get a **Lock all** button — groups deliberately cannot unlock everything at
-once.
+add-on. Each card shows the lock state and has **Lock**, **Open** and
+**Unlock** buttons (Open and Unlock ask for a second tap):
+
+- **Unlock** — Home Assistant's `lock.unlock`; with inception-mqtt this is
+  Inception's latched *Unlock*: the door stays unlocked until you Lock.
+- **Open** — Inception's momentary *Open*: lets someone in, then the door
+  re-locks by itself after its configured unlock time. Home Assistant's lock
+  entity has no such action, so the dashboard publishes `Open` to the door's
+  MQTT command topic (read from the add-on's discovery messages). The button
+  only appears for doors whose discovery config is visible to the add-on.
+
+Optional groups get a **Lock all** button — groups deliberately cannot
+unlock or open everything at once.
 
 ```yaml
 door_groups:

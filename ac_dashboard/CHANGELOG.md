@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.0
+
+- Doors: new **Open** button — Inception's momentary open (the door re-locks
+  by itself after its unlock time), next to Lock and the latched Unlock.
+  Works for doors bridged by the inception-mqtt add-on; sent via MQTT
+  because Home Assistant's lock entity has no "open" there.
+- Doors: card hint corrected — Unlock stays unlocked until you Lock.
+
 ## 1.7.0
 
 - New **Doors** page: lock / unlock `lock.*` entities (e.g. Inner Range
