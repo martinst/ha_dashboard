@@ -42,11 +42,21 @@ def sensor_ha_state(entity_id, state="21.5", **attrs):
 class FakeHAClient:
     """In-memory stand-in for HAClient; records service calls."""
 
-    def __init__(self, states=None, fail_entities=(), fail_states=False):
+    def __init__(self, states=None, fail_entities=(), fail_states=False,
+                 statistics=None, fail_statistics=False):
         self.states = states or []
         self.fail_entities = set(fail_entities)
         self.fail_states = fail_states
+        self.statistics = statistics or {}  # entity_id -> statistics rows
+        self.fail_statistics = fail_statistics
         self.calls = []
+        self.statistics_calls = []  # (statistic_ids, start, period)
+
+    async def get_statistics(self, statistic_ids, start, period):
+        self.statistics_calls.append((list(statistic_ids), start, period))
+        if self.fail_statistics:
+            raise HAError("HA unreachable")
+        return {i: self.statistics[i] for i in statistic_ids if i in self.statistics}
 
     async def get_states(self):
         if self.fail_states:
@@ -91,6 +101,7 @@ def make_client():
         get_cover_groups,
         get_groups,
         get_ha_client,
+        get_history_cache,
         get_scheduler,
         get_sensor_config,
     )
@@ -100,6 +111,8 @@ def make_client():
         app.dependency_overrides[get_groups] = lambda: list(groups)
         app.dependency_overrides[get_cover_groups] = lambda: list(cover_groups)
         app.dependency_overrides[get_sensor_config] = lambda: sensors or SensorConfig()
+        cache = {}
+        app.dependency_overrides[get_history_cache] = lambda: cache
         if scheduler is not None:
             app.dependency_overrides[get_scheduler] = lambda: scheduler
         return TestClient(app)

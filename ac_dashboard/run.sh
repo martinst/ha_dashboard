@@ -6,6 +6,7 @@ set -e
 
 export HA_URL="http://supervisor/core"
 export HA_TOKEN="${SUPERVISOR_TOKEN}"
+export HA_WS_URL="ws://supervisor/core/websocket"
 
 cd /opt/ac_dashboard
 

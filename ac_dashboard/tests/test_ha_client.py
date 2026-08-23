@@ -122,3 +122,95 @@ async def test_cover_services_post_service_calls():
         ("/api/services/cover/set_cover_position",
          {"entity_id": "cover.win", "position": 40}),
     ]
+
+
+import asyncio
+
+import websockets
+
+from datetime import datetime, timezone
+
+
+async def fake_ha_ws(received, result):
+    """Serve one HA-style websocket session: auth handshake, one command."""
+
+    async def handler(ws):
+        await ws.send(json.dumps({"type": "auth_required", "ha_version": "2026.7.2"}))
+        auth = json.loads(await ws.recv())
+        received["auth"] = auth
+        if auth.get("access_token") != "secret-token":
+            await ws.send(json.dumps({"type": "auth_invalid", "message": "bad token"}))
+            return
+        await ws.send(json.dumps({"type": "auth_ok", "ha_version": "2026.7.2"}))
+        cmd = json.loads(await ws.recv())
+        received["cmd"] = cmd
+        await ws.send(json.dumps({"id": cmd["id"], "type": "result", **result}))
+
+    return await websockets.serve(handler, "127.0.0.1", 0)
+
+
+async def test_get_statistics_authenticates_and_sends_command():
+    received = {}
+    rows = {"sensor.out": [{"start": 1.0e12, "end": 1.0e12 + 3.6e6, "mean": 12.5, "min": 12.0, "max": 13.0}]}
+    server = await fake_ha_ws(received, {"success": True, "result": rows})
+    port = server.sockets[0].getsockname()[1]
+    client = HAClient("http://ha.test", "secret-token", ws_url=f"ws://127.0.0.1:{port}/api/websocket")
+    try:
+        start = datetime(2026, 8, 16, 0, 0, tzinfo=timezone.utc)
+        result = await client.get_statistics(["sensor.out"], start, "hour")
+    finally:
+        server.close()
+        await server.wait_closed()
+        await client.aclose()
+    assert received["auth"] == {"type": "auth", "access_token": "secret-token"}
+    assert received["cmd"] == {
+        "id": 1,
+        "type": "recorder/statistics_during_period",
+        "start_time": "2026-08-16T00:00:00+00:00",
+        "statistic_ids": ["sensor.out"],
+        "period": "hour",
+        "types": ["mean", "min", "max"],
+    }
+    assert result == rows
+
+
+async def test_get_statistics_raises_haerror_on_failed_command():
+    server = await fake_ha_ws({}, {"success": False, "error": {"code": "x", "message": "nope"}})
+    port = server.sockets[0].getsockname()[1]
+    client = HAClient("http://ha.test", "secret-token", ws_url=f"ws://127.0.0.1:{port}/api/websocket")
+    try:
+        with pytest.raises(HAError):
+            await client.get_statistics(["sensor.out"], datetime.now(timezone.utc), "hour")
+    finally:
+        server.close()
+        await server.wait_closed()
+        await client.aclose()
+
+
+async def test_get_statistics_raises_haerror_on_bad_token():
+    server = await fake_ha_ws({}, {"success": True, "result": {}})
+    port = server.sockets[0].getsockname()[1]
+    client = HAClient("http://ha.test", "wrong", ws_url=f"ws://127.0.0.1:{port}/api/websocket")
+    try:
+        with pytest.raises(HAError):
+            await client.get_statistics(["sensor.out"], datetime.now(timezone.utc), "hour")
+    finally:
+        server.close()
+        await server.wait_closed()
+        await client.aclose()
+
+
+async def test_get_statistics_raises_haerror_when_unreachable():
+    client = HAClient("http://ha.test", "secret-token", ws_url="ws://127.0.0.1:1/api/websocket")
+    try:
+        with pytest.raises(HAError):
+            await client.get_statistics(["sensor.out"], datetime.now(timezone.utc), "hour")
+    finally:
+        await client.aclose()
+
+
+def test_ws_url_derived_from_base_url():
+    assert HAClient("http://homeassistant.local:8123", "t").ws_url == "ws://homeassistant.local:8123/api/websocket"
+    assert HAClient("https://ha.example:8123", "t").ws_url == "wss://ha.example:8123/api/websocket"
+    # The Supervisor proxies the core websocket at a different path
+    assert HAClient("http://supervisor/core", "t", ws_url="ws://supervisor/core/websocket").ws_url == "ws://supervisor/core/websocket"

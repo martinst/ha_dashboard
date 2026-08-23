@@ -179,6 +179,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
 }
 .temp-tile.indoor { border-left-color: var(--accent-heat); }
+.temp-tile { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.temp-tile:active { transform: scale(0.98); }
 .temp-tile.unavailable { opacity: 0.55; }
 .temp-label {
   color: var(--muted);
@@ -316,3 +318,89 @@ input[type="range"].position {
   margin: 14px 0 4px;
   accent-color: var(--accent-cool);
 }
+
+/* ---- temperature history sheet ---- */
+
+body.sheet-open { overflow: hidden; }
+.sheet { position: fixed; inset: 0; z-index: 20; }
+.sheet.hidden { display: none; }
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 40%);
+}
+.sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--card);
+  border-radius: 18px 18px 0 0;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgb(0 0 0 / 15%);
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: sheet-up 0.2s ease-out;
+}
+@keyframes sheet-up {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-head h2 { font-size: 1.1rem; margin: 0; }
+.sheet-close {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1rem;
+}
+
+.range-toggle {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.range-opt {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+.range-opt.active { background: var(--text); color: #fff; }
+
+.chart-summary {
+  display: flex;
+  gap: 20px;
+  margin-top: 12px;
+  min-height: 40px;
+  align-items: center;
+}
+.stat { display: flex; flex-direction: column; }
+.stat-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.stat-value { font-weight: 700; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.hint-inline { color: var(--muted); }
+
+.chart { margin-top: 6px; }
+.chart-svg { width: 100%; height: auto; display: block; }
+.chart-svg .grid { stroke: #e3e7ee; stroke-width: 1; }
+.chart-svg .axis-label { fill: var(--muted); font-size: 11px; }
+.chart-svg .band { fill: var(--accent-cool); fill-opacity: 0.15; }
+.chart-svg .mean {
+  fill: none;
+  stroke: var(--accent-cool);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart-svg .mean-dot { fill: var(--accent-cool); }

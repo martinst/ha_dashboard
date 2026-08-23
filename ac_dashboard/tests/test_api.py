@@ -433,3 +433,91 @@ def test_get_state_temperatures_null_when_no_sensors(make_client):
     client = make_client(FakeHAClient(states=[ha_state("climate.bedroom")]))
     body = client.get("/api/state").json()
     assert body["temperatures"] == {"outdoor": None, "indoor": None}
+
+
+from datetime import timedelta
+
+STAT_ROWS = [
+    {"start": 1.0e12, "end": 1.0e12 + 3.6e6, "mean": 12.456, "min": 12.0, "max": 13.0},
+]
+
+
+def temp_sensors():
+    return [
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+        sensor_ha_state("sensor.wn1980c_indoor_temperature", state="23.1"),
+    ]
+
+
+def test_history_endpoint_returns_points_for_slot(make_client):
+    fake = FakeHAClient(
+        states=temp_sensors(),
+        statistics={"sensor.wn1980c_outdoor_temperature": STAT_ROWS},
+    )
+    client = make_client(fake)
+    resp = client.get("/api/temperatures/outdoor/history?range=7d")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["range"] == "7d"
+    assert body["period"] == "hour"
+    assert body["unit"] == "°C"
+    assert body["entity_id"] == "sensor.wn1980c_outdoor_temperature"
+    assert body["points"] == [{"t": 1_000_000_000_000, "mean": 12.5, "min": 12.0, "max": 13.0}]
+    (ids, start, period) = fake.statistics_calls[0]
+    assert ids == ["sensor.wn1980c_outdoor_temperature"]
+    assert period == "hour"
+    assert timedelta(days=7) - timedelta(minutes=1) < (
+        __import__("datetime").datetime.now(start.tzinfo) - start
+    ) < timedelta(days=7, minutes=1)
+
+
+def test_history_endpoint_uses_5minute_period_for_24h(make_client):
+    fake = FakeHAClient(states=temp_sensors(), statistics={})
+    client = make_client(fake)
+    resp = client.get("/api/temperatures/indoor/history?range=24h")
+    assert resp.status_code == 200
+    assert resp.json()["points"] == []
+    assert fake.statistics_calls[0][0] == ["sensor.wn1980c_indoor_temperature"]
+    assert fake.statistics_calls[0][2] == "5minute"
+
+
+def test_history_endpoint_defaults_to_24h(make_client):
+    fake = FakeHAClient(states=temp_sensors())
+    resp = make_client(fake).get("/api/temperatures/outdoor/history")
+    assert resp.json()["range"] == "24h"
+
+
+def test_history_endpoint_caches_per_slot_and_range(make_client):
+    fake = FakeHAClient(states=temp_sensors())
+    client = make_client(fake)
+    client.get("/api/temperatures/outdoor/history?range=7d")
+    client.get("/api/temperatures/outdoor/history?range=7d")
+    client.get("/api/temperatures/outdoor/history?range=30d")
+    assert len(fake.statistics_calls) == 2
+
+
+def test_history_endpoint_unknown_slot_is_404(make_client):
+    resp = make_client(FakeHAClient(states=temp_sensors())).get(
+        "/api/temperatures/garage/history"
+    )
+    assert resp.status_code == 404
+
+
+def test_history_endpoint_bad_range_is_422(make_client):
+    resp = make_client(FakeHAClient(states=temp_sensors())).get(
+        "/api/temperatures/outdoor/history?range=1y"
+    )
+    assert resp.status_code == 422
+
+
+def test_history_endpoint_slot_without_sensor_is_404(make_client):
+    resp = make_client(FakeHAClient(states=[ha_state("climate.bedroom")])).get(
+        "/api/temperatures/outdoor/history"
+    )
+    assert resp.status_code == 404
+
+
+def test_history_endpoint_502_when_statistics_fail(make_client):
+    fake = FakeHAClient(states=temp_sensors(), fail_statistics=True)
+    resp = make_client(fake).get("/api/temperatures/outdoor/history")
+    assert resp.status_code == 502

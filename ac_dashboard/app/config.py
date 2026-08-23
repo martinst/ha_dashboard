@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     ha_url: str = "http://localhost:8123"
     ha_token: str = ""
+    ha_ws_url: str = ""  # empty = derive from ha_url (…/api/websocket)
     schedules_path: str = "schedules.json"
     outdoor_sensor: str = ""
     indoor_sensor: str = ""

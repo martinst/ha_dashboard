@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0
+
+- Tap the Outdoor / Indoor tile to open a temperature history chart with a
+  24h / 7 days / 30 days toggle (mean line with min–max band)
+- History is read from Home Assistant's long-term statistics over the
+  websocket API, so it goes back further than the recorder's raw history
+
 ## 1.5.0
 
 - **Outdoor / Indoor temperature** strip at the top of both pages, read from

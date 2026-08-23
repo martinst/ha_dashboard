@@ -1,8 +1,11 @@
 import asyncio
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, model_validator
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +19,7 @@ from app.config import (
     load_presets,
 )
 from app.ha_client import HAClient, HAError
+from app.history import RANGES, build_history
 from app.scheduler import Scheduler, fetch_timezone
 from app.state import build_cover_groups, build_groups, build_temperatures
 
@@ -23,7 +27,10 @@ from app.state import build_cover_groups, build_groups, build_temperatures
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = Settings()
-    app.state.ha_client = HAClient(settings.ha_url, settings.ha_token)
+    app.state.ha_client = HAClient(
+        settings.ha_url, settings.ha_token, ws_url=settings.ha_ws_url or None
+    )
+    app.state.history_cache = {}
     app.state.groups = load_groups()
     app.state.cover_groups = load_groups("window_groups.yaml")
     app.state.sensor_config = settings.sensor_config()
@@ -57,6 +64,10 @@ def get_cover_groups(request: Request) -> list:
 
 def get_sensor_config(request: Request) -> SensorConfig:
     return request.app.state.sensor_config
+
+
+def get_history_cache(request: Request) -> dict:
+    return request.app.state.history_cache
 
 
 def get_scheduler(request: Request) -> Scheduler:
@@ -154,6 +165,39 @@ async def get_state(
             sensor_states, sensors.outdoor, sensors.indoor
         ),
     }
+
+
+HISTORY_CACHE_SECONDS = 60
+
+
+@app.get("/api/temperatures/{slot}/history")
+async def get_temperature_history(
+    slot: str,
+    range: Literal["24h", "7d", "30d"] = Query("24h"),
+    ha: HAClient = Depends(get_ha_client),
+    sensors: SensorConfig = Depends(get_sensor_config),
+    cache: dict = Depends(get_history_cache),
+):
+    if slot not in ("outdoor", "indoor"):
+        raise HTTPException(status_code=404, detail=f"Unknown slot: {slot}")
+    cached = cache.get((slot, range))
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+
+    states = await ha.get_states()
+    sensor_states = [s for s in states if s["entity_id"].startswith("sensor.")]
+    sensor = build_temperatures(sensor_states, sensors.outdoor, sensors.indoor)[slot]
+    if sensor is None:
+        raise HTTPException(status_code=404, detail=f"No {slot} temperature sensor")
+
+    lookback, period = RANGES[range]
+    start = datetime.now(timezone.utc) - lookback
+    rows = await ha.get_statistics([sensor["entity_id"]], start, period)
+    body = build_history(range, sensor["unit"], rows.get(sensor["entity_id"], []))
+    body["entity_id"] = sensor["entity_id"]
+    body["name"] = sensor["name"]
+    cache[(slot, range)] = (time.monotonic() + HISTORY_CACHE_SECONDS, body)
+    return body
 
 
 class ArmRequest(BaseModel):

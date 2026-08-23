@@ -1,4 +1,8 @@
+import json
+from datetime import datetime
+
 import httpx
+import websockets
 
 
 class HAError(Exception):
@@ -13,7 +17,14 @@ class HAClient:
         base_url: str,
         token: str,
         transport: httpx.AsyncBaseTransport | None = None,
+        ws_url: str | None = None,
     ):
+        self._token = token
+        # Core serves its websocket at /api/websocket; the Supervisor proxy
+        # exposes it at ws://supervisor/core/websocket instead (pass ws_url).
+        self.ws_url = ws_url or (
+            base_url.rstrip("/").replace("http", "ws", 1) + "/api/websocket"
+        )
         self._client = httpx.AsyncClient(
             base_url=base_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -79,6 +90,41 @@ class HAClient:
             "/api/services/cover/set_cover_position",
             body={"entity_id": entity_id, "position": position},
         )
+
+    async def get_statistics(
+        self, statistic_ids: list[str], start: datetime, period: str
+    ) -> dict[str, list[dict]]:
+        """recorder/statistics_during_period — only available over websocket.
+
+        Returns {statistic_id: [{start, end, mean, min, max}, ...]} with
+        start/end as epoch milliseconds."""
+        command = {
+            "id": 1,
+            "type": "recorder/statistics_during_period",
+            "start_time": start.isoformat(),
+            "statistic_ids": list(statistic_ids),
+            "period": period,
+            "types": ["mean", "min", "max"],
+        }
+        try:
+            async with websockets.connect(self.ws_url, open_timeout=10) as ws:
+                await self._ws_auth(ws)
+                await ws.send(json.dumps(command))
+                reply = json.loads(await ws.recv())
+        except (OSError, websockets.WebSocketException, ValueError, TimeoutError) as exc:
+            raise HAError(f"Home Assistant websocket failed: {exc}") from exc
+        if not reply.get("success"):
+            raise HAError(f"Home Assistant statistics failed: {reply.get('error')}")
+        return reply.get("result") or {}
+
+    async def _ws_auth(self, ws) -> None:
+        hello = json.loads(await ws.recv())
+        if hello.get("type") != "auth_required":
+            raise HAError(f"unexpected websocket greeting: {hello.get('type')}")
+        await ws.send(json.dumps({"type": "auth", "access_token": self._token}))
+        auth = json.loads(await ws.recv())
+        if auth.get("type") != "auth_ok":
+            raise HAError(f"websocket auth failed: {auth.get('message')}")
 
     async def _request(self, method: str, path: str, body: dict | None = None):
         try:

@@ -62,6 +62,13 @@ indoor_sensor: sensor.hallway_temperature
 A tile is hidden when no sensor is configured or found, and dimmed when the
 sensor is unavailable.
 
+**Tap a tile** to open a history chart: 24 hours (5-minute resolution), 7
+days or 30 days (hourly), showing the mean with a shaded min–max band. The
+data comes from Home Assistant's long-term statistics, so it goes back as far
+as the sensor has been recording statistics — the recorder's `purge_keep_days`
+setting does not limit it. A sensor that was recently added or renamed
+starts with an empty chart that fills in over time.
+
 ## Schedule presets
 
 Optional schedules for the **Schedule** tab. You define presets here;
