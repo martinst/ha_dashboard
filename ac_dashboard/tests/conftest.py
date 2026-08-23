@@ -84,7 +84,9 @@ class FakeHAClient:
         self.calls.append(("mqtt_publish", topic, payload))
 
     async def mqtt_subscribe_retained(self, topic, wait=2.0):
+        import asyncio
         self.mqtt_subscriptions.append(topic)
+        await asyncio.sleep(0)  # yield like a real network call would
         if self.fail_mqtt_subscribe:
             raise HAError("not admin")
         return list(self.mqtt_retained)
@@ -196,8 +198,14 @@ def make_client():
         app.dependency_overrides[get_cover_groups] = lambda: list(cover_groups)
         app.dependency_overrides[get_door_groups] = lambda: list(door_groups)
         app.dependency_overrides[get_auth] = lambda: auth
+        # The lifespan (and its background refresh) doesn't run under
+        # TestClient; load the fake's discovery configs once, like startup would.
+        import asyncio as _asyncio
         from app.doors import DoorTopics
         topics = DoorTopics()
+        if getattr(fake_ha, "mqtt_retained", None):
+            _asyncio.run(topics.refresh(fake_ha))
+            fake_ha.mqtt_subscriptions.clear()
         app.dependency_overrides[get_door_topics] = lambda: topics
         app.dependency_overrides[get_sensor_config] = lambda: sensors or SensorConfig()
         cache = {}

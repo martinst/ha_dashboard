@@ -776,3 +776,29 @@ def test_door_group_open_all_is_refused(make_client, tmp_path):
     client = make_client(FakeHAClient(), door_groups=DOOR_GROUPS, auth=make_auth(tmp_path, transport))
     login(client)
     assert client.post("/api/door-groups/Street/set", json={"action": "open"}).status_code == 400
+
+
+# ---- diagnostics + single-poll doors page -----------------------------------
+
+import logging
+
+
+def test_ha_error_is_logged_with_path_and_cause(make_client, caplog):
+    client = make_client(FakeHAClient(fail_states=True))
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        resp = client.get("/api/state")
+    assert resp.status_code == 502
+    assert any("/api/state" in r.getMessage() and "HA unreachable" in r.getMessage()
+               for r in caplog.records)
+
+
+def test_doors_state_includes_temperatures(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS + [
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+    ])
+    client = make_client(fake, auth=make_auth(tmp_path, transport))
+    login(client)
+    body = client.get("/api/doors").json()
+    assert body["temperatures"]["outdoor"]["temp"] == 11.9
+    assert body["temperatures"]["indoor"] is None

@@ -5,12 +5,13 @@ HA's lock entities from the inception-mqtt add-on only know Lock/Unlock
 unlock time) is reached by publishing "Open" straight to the door's MQTT
 command topic — the add-on passes the payload through as DoorControlType.
 The command topics come from the retained MQTT discovery configs, matched to
-HA entities by name.
+HA entities by name. They are read in a background task so page polls never
+wait on (or coincide with) a websocket round-trip.
 """
 
+import asyncio
 import json
 import logging
-import time
 
 from app.ha_client import HAClient, HAError
 
@@ -18,6 +19,7 @@ log = logging.getLogger(__name__)
 
 DISCOVERY_TOPIC = "homeassistant/lock/#"
 OPEN_PAYLOAD = "Open"
+REFRESH_INTERVAL = 600.0
 
 
 def parse_lock_discovery(messages: list[tuple[str, str]]) -> dict[str, str]:
@@ -34,29 +36,40 @@ def parse_lock_discovery(messages: list[tuple[str, str]]) -> dict[str, str]:
 
 
 class DoorTopics:
-    """Cached name -> command topic map, refreshed from the broker."""
+    """Name -> command topic map, refreshed from the broker in the background."""
 
-    def __init__(self, ttl: float = 600.0, clock=time.monotonic):
-        self._ttl = ttl
-        self._clock = clock
+    def __init__(self):
         self._topics: dict[str, str] = {}
-        self._expires = 0.0
+        self._lock = asyncio.Lock()
+        self._loaded = False
 
-    async def _refresh(self, ha: HAClient) -> None:
-        if self._clock() < self._expires:
-            return
-        try:
-            messages = await ha.mqtt_subscribe_retained(DISCOVERY_TOPIC)
-            self._topics = parse_lock_discovery(messages)
-        except HAError as exc:
-            log.warning("Could not read lock discovery configs (Open disabled): %s", exc)
-            self._topics = {}
-        self._expires = self._clock() + self._ttl
-
-    async def names(self, ha: HAClient) -> set[str]:
-        await self._refresh(ha)
+    def names(self) -> set[str]:
         return set(self._topics)
 
-    async def command_topic(self, ha: HAClient, name: str) -> str | None:
-        await self._refresh(ha)
+    def command_topic(self, name: str) -> str | None:
         return self._topics.get(name)
+
+    async def refresh(self, ha: HAClient) -> None:
+        """Re-read discovery configs. Concurrent calls coalesce into one read;
+        a failed read keeps the last good mapping."""
+        if self._lock.locked():
+            async with self._lock:  # wait for the in-flight refresh
+                return
+        async with self._lock:
+            try:
+                messages = await ha.mqtt_subscribe_retained(DISCOVERY_TOPIC)
+            except HAError as exc:
+                log.warning("Door discovery read failed (keeping %d topics): %s",
+                            len(self._topics), exc)
+                return
+            self._topics = parse_lock_discovery(messages)
+            if not self._loaded:
+                log.info("Door discovery: %d openable doors", len(self._topics))
+            self._loaded = True
+
+    def start(self, ha: HAClient, interval: float = REFRESH_INTERVAL) -> asyncio.Task:
+        async def loop():
+            while True:
+                await self.refresh(ha)
+                await asyncio.sleep(interval)
+        return asyncio.create_task(loop(), name="door-topics-refresh")

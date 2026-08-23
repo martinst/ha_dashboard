@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.1
+
+- Doors: the MQTT discovery read for Open now runs in a background task
+  (at start and every 10 minutes) instead of during page polls, and a failed
+  read keeps the previous mapping
+- Doors page polls a single endpoint (`/api/doors` now includes the
+  temperatures), halving its Home Assistant requests
+- Log lines are timestamped, and every Home Assistant failure that the page
+  sees as 502 is logged with its path and cause
+
 ## 1.8.0
 
 - Doors: new **Open** button — Inception's momentary open (the door re-locks

@@ -73,4 +73,4 @@ else
 fi
 
 # shellcheck disable=SC2086
-exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8088 ${SSL_ARGS}
+exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8088 --log-config /opt/ac_dashboard/log_config.json ${SSL_ARGS}

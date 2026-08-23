@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     app.state.cover_groups = load_groups("window_groups.yaml")
     app.state.door_groups = load_groups("door_groups.yaml")
     app.state.door_topics = DoorTopics()
+    app.state.door_topics_task = app.state.door_topics.start(app.state.ha_client)
     app.state.sensor_config = settings.sensor_config()
     app.state.auth = None
     if settings.google_client_id:
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.scheduler.start()
     yield
+    app.state.door_topics_task.cancel()
     await app.state.scheduler.stop()
     await app.state.ha_client.aclose()
     if app.state.auth:
@@ -87,6 +90,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 
 
@@ -140,6 +144,8 @@ def get_scheduler(request: Request) -> Scheduler:
 
 @app.exception_handler(HAError)
 async def ha_error_handler(request: Request, exc: HAError) -> JSONResponse:
+    # Surfaced as 502 to the page; logged so a burst can be traced upstream.
+    log.warning("%s %s -> 502: %s", request.method, request.url.path, exc)
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
@@ -430,15 +436,21 @@ async def get_doors(
     ha: HAClient = Depends(get_ha_client),
     groups: list = Depends(get_door_groups),
     topics: DoorTopics = Depends(get_door_topics),
+    sensors: SensorConfig = Depends(get_sensor_config),
 ):
     states = await ha.get_states()
     locks = [s for s in states if s["entity_id"].startswith("lock.")]
-    openable = await topics.names(ha)
+    sensor_states = [s for s in states if s["entity_id"].startswith("sensor.")]
+    openable = topics.names()
     result = build_lock_groups(locks, groups)
     for group in result:
         for unit in group["units"]:
             unit["supports_open"] = unit["name"] in openable
-    return {"user": user, "groups": result}
+    return {
+        "user": user,
+        "groups": result,
+        "temperatures": build_temperatures(sensor_states, sensors.outdoor, sensors.indoor),
+    }
 
 
 @app.post("/api/doors/{entity_id}/set")
@@ -458,7 +470,7 @@ async def set_door(
     if state is None:
         raise HTTPException(status_code=404, detail=f"Unknown door: {entity_id}")
     name = state.get("attributes", {}).get("friendly_name", entity_id)
-    topic = await topics.command_topic(ha, name)
+    topic = topics.command_topic(name)
     if topic is None:
         raise HTTPException(status_code=409, detail="Open is not available for this door")
     await ha.mqtt_publish(topic, OPEN_PAYLOAD)

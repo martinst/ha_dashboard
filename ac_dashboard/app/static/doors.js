@@ -23,18 +23,14 @@ const PAGE = { domain: "lock", presetsHint: "", presetSummary: () => "" };
 
 async function poll() {
   try {
-    const [doorsResp, stateResp] = await Promise.all([
-      fetch("/api/doors"),
-      fetch("/api/state"),
-    ]);
+    const doorsResp = await fetch("/api/doors");
     if (doorsResp.status === 401) {
       window.location.href = LOGIN_URL;
       return;
     }
-    if (!doorsResp.ok || !stateResp.ok) throw new Error("poll failed");
+    if (!doorsResp.ok) throw new Error("poll failed");
     const doors = await doorsResp.json();
-    const st = await stateResp.json();
-    mergeState({ user: doors.user, groups: doors.groups, temperatures: st.temperatures });
+    mergeState({ user: doors.user, groups: doors.groups, temperatures: doors.temperatures });
     setConnected(true);
   } catch {
     setConnected(false);
