@@ -46,6 +46,8 @@ with open("door_groups.yaml", "w") as f:
     yaml.safe_dump({"groups": options.get("door_groups", [])}, f)
 with open("door_names.yaml", "w") as f:
     yaml.safe_dump({"names": options.get("door_names", [])}, f)
+with open("door_order.yaml", "w") as f:
+    yaml.safe_dump({"order": options.get("door_order", [])}, f)
 PY
 
 # Google sign-in for the Doors page (session key persists in /data so

@@ -203,3 +203,23 @@ def test_load_door_names_rejects_bad_entries(tmp_path):
     p.write_text("names:\n  - entity: lock.x\n")
     with pytest.raises(ValueError, match="door_names"):
         load_door_names(p)
+
+
+from app.config import load_door_order
+
+
+def test_load_door_order_reads_entity_list(tmp_path):
+    p = tmp_path / "door_order.yaml"
+    p.write_text("order:\n  - lock.front_door\n  - lock.garage\n")
+    assert load_door_order(p) == ["lock.front_door", "lock.garage"]
+
+
+def test_load_door_order_missing_file_is_empty(tmp_path):
+    assert load_door_order(tmp_path / "nope.yaml") == []
+
+
+def test_load_door_order_rejects_non_string_entries(tmp_path):
+    p = tmp_path / "door_order.yaml"
+    p.write_text("order:\n  - lock.x\n  - 5\n")
+    with pytest.raises(ValueError, match="door_order"):
+        load_door_order(p)

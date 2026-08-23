@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.10.0
+
+- Doors: `door_order` option — list entity ids in the order they should
+  appear; unlisted doors follow, sorted by name
+
 ## 1.9.0
 
 - Doors: `door_names` option to give doors friendlier names on the page

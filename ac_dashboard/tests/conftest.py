@@ -184,6 +184,7 @@ def make_client():
         get_cover_groups,
         get_door_groups,
         get_door_names,
+        get_door_order,
         get_door_topics,
         get_groups,
         get_ha_client,
@@ -193,12 +194,13 @@ def make_client():
     )
 
     def _make(fake_ha, groups=(), scheduler=None, cover_groups=(), sensors=None,
-              door_groups=(), auth=None, door_names=None):
+              door_groups=(), auth=None, door_names=None, door_order=None):
         app.dependency_overrides[get_ha_client] = lambda: fake_ha
         app.dependency_overrides[get_groups] = lambda: list(groups)
         app.dependency_overrides[get_cover_groups] = lambda: list(cover_groups)
         app.dependency_overrides[get_door_groups] = lambda: list(door_groups)
         app.dependency_overrides[get_door_names] = lambda: dict(door_names or {})
+        app.dependency_overrides[get_door_order] = lambda: list(door_order or [])
         app.dependency_overrides[get_auth] = lambda: auth
         # The lifespan (and its background refresh) doesn't run under
         # TestClient; load the fake's discovery configs once, like startup would.

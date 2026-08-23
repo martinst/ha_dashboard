@@ -65,7 +65,9 @@ def missing_cover(entity_id: str) -> dict:
     }
 
 
-def _build(states: list[dict], groups: list[Group], state_fn, missing_fn) -> list[dict]:
+def _build(
+    states: list[dict], groups: list[Group], state_fn, missing_fn, sort_key=None
+) -> list[dict]:
     by_id = {s["entity_id"]: s for s in states}
     grouped_ids: set[str] = set()
     result = []
@@ -79,7 +81,7 @@ def _build(states: list[dict], groups: list[Group], state_fn, missing_fn) -> lis
 
     ungrouped = sorted(
         (state_fn(s) for eid, s in by_id.items() if eid not in grouped_ids),
-        key=lambda u: u["name"],
+        key=sort_key or (lambda u: u["name"]),
     )
     if ungrouped:
         result.append({"name": UNGROUPED, "units": ungrouped})
@@ -114,11 +116,18 @@ def missing_lock(entity_id: str) -> dict:
 
 
 def build_lock_groups(
-    lock_states: list[dict], groups: list[Group], names: dict[str, str] | None = None
+    lock_states: list[dict],
+    groups: list[Group],
+    names: dict[str, str] | None = None,
+    order: list[str] | None = None,
 ) -> list[dict]:
-    """Lock groups with optional display-name overrides. The HA name is kept
-    as `ha_name` — it is what MQTT discovery configs are matched on."""
+    """Lock groups with optional display-name overrides and explicit ordering.
+
+    The HA name is kept as `ha_name` — it is what MQTT discovery configs are
+    matched on. Doors listed in `order` come first, in that order; the rest
+    follow sorted by display name."""
     names = names or {}
+    rank = {entity_id: i for i, entity_id in enumerate(order or [])}
 
     def _display(unit: dict) -> dict:
         unit["ha_name"] = unit["name"]
@@ -130,6 +139,7 @@ def build_lock_groups(
         groups,
         lambda s: _display(lock_from_ha_state(s)),
         lambda eid: _display(missing_lock(eid)),
+        sort_key=lambda u: (rank.get(u["entity_id"], len(rank)), u["name"]),
     )
 
 

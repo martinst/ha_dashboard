@@ -77,6 +77,16 @@ door_names:
     name: Front door
 ```
 
+Control the order they appear in with `door_order` — doors you list come
+first, in that order; any others follow sorted by name:
+
+```yaml
+door_order:
+  - lock.ironside_15_tennyson_front_door
+  - lock.ironside_15_tennyson_front_gate
+  - lock.driveway_gates
+```
+
 ```yaml
 door_groups:
   - name: Street

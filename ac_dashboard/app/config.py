@@ -163,3 +163,15 @@ def load_door_names(path: str | Path = "door_names.yaml") -> dict[str, str]:
     except (TypeError, ValidationError) as exc:
         raise ValueError(f"Invalid door_names ({path}): {exc}") from exc
     return {n.entity: n.name for n in entries}
+
+
+def load_door_order(path: str | Path = "door_order.yaml") -> list[str]:
+    """Entity ids in display order for the Doors page (unlisted sort after)."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    data = yaml.safe_load(path.read_text()) or {}
+    order = data.get("order", [])
+    if not isinstance(order, list) or any(not isinstance(e, str) for e in order):
+        raise ValueError(f"Invalid door_order ({path}): must be a list of entity ids")
+    return order

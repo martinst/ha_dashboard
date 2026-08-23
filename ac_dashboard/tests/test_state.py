@@ -252,3 +252,24 @@ def test_lock_display_names_override_ha_names_and_keep_original():
     assert [(u["name"], u["ha_name"]) for u in ungrouped] == [
         ("Alpha", "Alpha"), ("Back gate", "Zeta")
     ]
+
+
+def test_door_order_puts_listed_doors_first_in_given_order():
+    states = [lock_ha_state("lock.alpha"), lock_ha_state("lock.mid"),
+              lock_ha_state("lock.zeta")]
+    result = build_lock_groups(
+        states, [], order=["lock.zeta", "lock.mid"]
+    )
+    assert [u["entity_id"] for u in result[0]["units"]] == [
+        "lock.zeta", "lock.mid", "lock.alpha"  # unlisted follow, alphabetical
+    ]
+
+
+def test_door_order_sorts_within_display_names():
+    # unlisted doors sort by display name, after the ordered ones
+    states = [lock_ha_state("lock.a"), lock_ha_state("lock.b"),
+              lock_ha_state("lock.c")]
+    result = build_lock_groups(
+        states, [], names={"lock.b": "Zzz", "lock.c": "Aaa"}, order=["lock.a"]
+    )
+    assert [u["name"] for u in result[0]["units"]] == ["A", "Aaa", "Zzz"]

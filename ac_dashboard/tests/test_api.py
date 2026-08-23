@@ -823,3 +823,16 @@ def test_doors_use_display_names_and_open_still_resolves(make_client, tmp_path):
     resp = client.post("/api/doors/lock.front_door/set", json={"action": "open"})
     assert resp.status_code == 200
     assert fake.calls == [("mqtt_publish", "inception/lock/abc/set", "Open")]
+
+
+# ---- door ordering -----------------------------------------------------------
+
+
+def test_doors_respect_configured_order(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS)  # front_door, garage
+    client = make_client(fake, auth=make_auth(tmp_path, transport),
+                         door_order=["lock.garage", "lock.front_door"])
+    login(client)
+    units = client.get("/api/doors").json()["groups"][0]["units"]
+    assert [u["entity_id"] for u in units] == ["lock.garage", "lock.front_door"]
