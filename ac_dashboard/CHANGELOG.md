@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.2
+
+- Fix: the 1.8.1 log configuration raised a "Logging error" on every request
+  (access-log fields need uvicorn's own formatter); logs are clean and
+  timestamped again
+
 ## 1.8.1
 
 - Doors: the MQTT discovery read for Open now runs in a background task
