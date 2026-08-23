@@ -145,3 +145,21 @@ def load_groups(path: str | Path = "groups.yaml") -> list[Group]:
         return [Group(**g) for g in data.get("groups", [])]
     except (TypeError, ValidationError) as exc:
         raise ValueError(f"Invalid groups.yaml ({path}): {exc}") from exc
+
+
+class DoorName(BaseModel):
+    entity: str
+    name: str
+
+
+def load_door_names(path: str | Path = "door_names.yaml") -> dict[str, str]:
+    """{entity_id: display name} overrides for the Doors page."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text()) or {}
+    try:
+        entries = [DoorName(**n) for n in data.get("names", [])]
+    except (TypeError, ValidationError) as exc:
+        raise ValueError(f"Invalid door_names ({path}): {exc}") from exc
+    return {n.entity: n.name for n in entries}

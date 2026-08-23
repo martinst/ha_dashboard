@@ -174,3 +174,32 @@ def test_preset_command_builds_domain_command():
     assert climate.domain == "climate"
     assert climate.command() == SetCommand(mode="heat", temperature=23.0)
     assert cover.command() == CoverCommand(position=20)
+
+
+from app.config import load_door_names
+
+
+def test_load_door_names_maps_entity_to_display_name(tmp_path):
+    p = tmp_path / "door_names.yaml"
+    p.write_text("""
+names:
+  - entity: lock.ironside_15_tennyson_front_door
+    name: Front door
+  - entity: lock.garage_door
+    name: Garage
+""")
+    assert load_door_names(p) == {
+        "lock.ironside_15_tennyson_front_door": "Front door",
+        "lock.garage_door": "Garage",
+    }
+
+
+def test_load_door_names_missing_file_is_empty(tmp_path):
+    assert load_door_names(tmp_path / "nope.yaml") == {}
+
+
+def test_load_door_names_rejects_bad_entries(tmp_path):
+    p = tmp_path / "door_names.yaml"
+    p.write_text("names:\n  - entity: lock.x\n")
+    with pytest.raises(ValueError, match="door_names"):
+        load_door_names(p)

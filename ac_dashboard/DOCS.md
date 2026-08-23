@@ -64,6 +64,19 @@ add-on. Each card shows the lock state and has **Lock**, **Open** and
 Optional groups get a **Lock all** button — groups deliberately cannot
 unlock or open everything at once.
 
+Door names come from Home Assistant; with inception-mqtt they are the
+Inception item names (sometimes long, e.g. "Standard LAN Access Module
+(SLAM) 2 Basement/Mud Room Door - Door 2") and can't be edited in HA. Give
+them friendlier names for the page with `door_names`:
+
+```yaml
+door_names:
+  - entity: lock.standard_lan_access_module_slam_2_basement_mud_room_door_door_2
+    name: Mud room door
+  - entity: lock.ironside_15_tennyson_front_door
+    name: Front door
+```
+
 ```yaml
 door_groups:
   - name: Street

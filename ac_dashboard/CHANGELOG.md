@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0
+
+- Doors: `door_names` option to give doors friendlier names on the page
+  (Home Assistant's names from inception-mqtt can't be edited in HA)
+
 ## 1.8.2
 
 - Fix: the 1.8.1 log configuration raised a "Logging error" on every request

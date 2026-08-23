@@ -217,6 +217,7 @@ def test_lock_fields_mapped_from_ha_state():
     assert result[0]["units"][0] == {
         "entity_id": "lock.front_door",
         "name": "Front Door",
+        "ha_name": "Front Door",
         "state": "unlocking",
         "available": True,
     }
@@ -227,7 +228,8 @@ def test_unavailable_and_missing_locks():
     result = build_lock_groups(states, [Group(name="G", entities=["lock.a", "lock.gone"])])
     a, gone = result[0]["units"]
     assert a["available"] is False
-    assert gone == {"entity_id": "lock.gone", "name": "Gone", "state": None, "available": False}
+    assert gone == {"entity_id": "lock.gone", "name": "Gone", "ha_name": "Gone",
+                    "state": None, "available": False}
 
 
 def test_unlisted_locks_land_in_ungrouped():
@@ -235,3 +237,18 @@ def test_unlisted_locks_land_in_ungrouped():
     result = build_lock_groups(states, [])
     assert [g["name"] for g in result] == ["Ungrouped"]
     assert [u["name"] for u in result[0]["units"]] == ["Alpha", "Zeta"]
+
+
+def test_lock_display_names_override_ha_names_and_keep_original():
+    states = [lock_ha_state("lock.zeta"), lock_ha_state("lock.alpha")]
+    names = {"lock.zeta": "Back gate", "lock.gone": "Side door"}
+    result = build_lock_groups(
+        states, [Group(name="G", entities=["lock.gone"])], names=names
+    )
+    gone = result[0]["units"][0]
+    assert gone["name"] == "Side door" and gone["ha_name"] == "Gone"
+    ungrouped = result[1]["units"]
+    # sorted by display name: "Alpha" < "Back gate"
+    assert [(u["name"], u["ha_name"]) for u in ungrouped] == [
+        ("Alpha", "Alpha"), ("Back gate", "Zeta")
+    ]

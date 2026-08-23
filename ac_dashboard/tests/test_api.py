@@ -657,10 +657,10 @@ def test_doors_state_for_logged_in_user(make_client, tmp_path):
     assert body["user"] == "maria@example.com"
     assert body["groups"][0]["name"] == "Street"
     assert body["groups"][0]["units"] == [
-        {"entity_id": "lock.front_door", "name": "Front Door", "state": "locked",
-         "available": True, "supports_open": False},
-        {"entity_id": "lock.garage", "name": "Garage", "state": "unlocked",
-         "available": True, "supports_open": False},
+        {"entity_id": "lock.front_door", "name": "Front Door", "ha_name": "Front Door",
+         "state": "locked", "available": True, "supports_open": False},
+        {"entity_id": "lock.garage", "name": "Garage", "ha_name": "Garage",
+         "state": "unlocked", "available": True, "supports_open": False},
     ]
 
 
@@ -802,3 +802,24 @@ def test_doors_state_includes_temperatures(make_client, tmp_path):
     body = client.get("/api/doors").json()
     assert body["temperatures"]["outdoor"]["temp"] == 11.9
     assert body["temperatures"]["indoor"] is None
+
+
+# ---- door display names ------------------------------------------------------
+
+
+def test_doors_use_display_names_and_open_still_resolves(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS)
+    fake.mqtt_retained = [lock_discovery("abc", "Front Door")]  # discovery uses HA name
+    client = make_client(
+        fake, auth=make_auth(tmp_path, transport),
+        door_names={"lock.front_door": "Front door (street)"},
+    )
+    login(client)
+    units = {u["entity_id"]: u for g in client.get("/api/doors").json()["groups"] for u in g["units"]}
+    assert units["lock.front_door"]["name"] == "Front door (street)"
+    assert units["lock.front_door"]["supports_open"] is True
+    assert units["lock.garage"]["name"] == "Garage"
+    resp = client.post("/api/doors/lock.front_door/set", json={"action": "open"})
+    assert resp.status_code == 200
+    assert fake.calls == [("mqtt_publish", "inception/lock/abc/set", "Open")]

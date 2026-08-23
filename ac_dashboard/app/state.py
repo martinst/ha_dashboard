@@ -113,8 +113,24 @@ def missing_lock(entity_id: str) -> dict:
     }
 
 
-def build_lock_groups(lock_states: list[dict], groups: list[Group]) -> list[dict]:
-    return _build(lock_states, groups, lock_from_ha_state, missing_lock)
+def build_lock_groups(
+    lock_states: list[dict], groups: list[Group], names: dict[str, str] | None = None
+) -> list[dict]:
+    """Lock groups with optional display-name overrides. The HA name is kept
+    as `ha_name` — it is what MQTT discovery configs are matched on."""
+    names = names or {}
+
+    def _display(unit: dict) -> dict:
+        unit["ha_name"] = unit["name"]
+        unit["name"] = names.get(unit["entity_id"], unit["name"])
+        return unit
+
+    return _build(
+        lock_states,
+        groups,
+        lambda s: _display(lock_from_ha_state(s)),
+        lambda eid: _display(missing_lock(eid)),
+    )
 
 
 # ---- temperature sensors (e.g. an Ecowitt weather console) ----

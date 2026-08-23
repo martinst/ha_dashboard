@@ -44,6 +44,8 @@ with open("window_presets.yaml", "w") as f:
     yaml.safe_dump({"presets": fix_times(options.get("window_presets", []))}, f)
 with open("door_groups.yaml", "w") as f:
     yaml.safe_dump({"groups": options.get("door_groups", [])}, f)
+with open("door_names.yaml", "w") as f:
+    yaml.safe_dump({"names": options.get("door_names", [])}, f)
 PY
 
 # Google sign-in for the Doors page (session key persists in /data so

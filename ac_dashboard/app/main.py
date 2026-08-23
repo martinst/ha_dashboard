@@ -36,6 +36,7 @@ from app.config import (
     SensorConfig,
     Settings,
     load_cover_presets,
+    load_door_names,
     load_groups,
     load_presets,
 )
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     app.state.groups = load_groups()
     app.state.cover_groups = load_groups("window_groups.yaml")
     app.state.door_groups = load_groups("door_groups.yaml")
+    app.state.door_names = load_door_names()
     app.state.door_topics = DoorTopics()
     app.state.door_topics_task = app.state.door_topics.start(app.state.ha_client)
     app.state.sensor_config = settings.sensor_config()
@@ -108,6 +110,10 @@ def get_cover_groups(request: Request) -> list:
 
 def get_door_groups(request: Request) -> list:
     return request.app.state.door_groups
+
+
+def get_door_names(request: Request) -> dict:
+    return request.app.state.door_names
 
 
 def get_door_topics(request: Request) -> DoorTopics:
@@ -437,15 +443,16 @@ async def get_doors(
     groups: list = Depends(get_door_groups),
     topics: DoorTopics = Depends(get_door_topics),
     sensors: SensorConfig = Depends(get_sensor_config),
+    names: dict = Depends(get_door_names),
 ):
     states = await ha.get_states()
     locks = [s for s in states if s["entity_id"].startswith("lock.")]
     sensor_states = [s for s in states if s["entity_id"].startswith("sensor.")]
     openable = topics.names()
-    result = build_lock_groups(locks, groups)
+    result = build_lock_groups(locks, groups, names)
     for group in result:
         for unit in group["units"]:
-            unit["supports_open"] = unit["name"] in openable
+            unit["supports_open"] = unit["ha_name"] in openable
     return {
         "user": user,
         "groups": result,
