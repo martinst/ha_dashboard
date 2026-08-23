@@ -91,6 +91,16 @@ class HAClient:
             body={"entity_id": entity_id, "position": position},
         )
 
+    async def lock(self, entity_id: str) -> None:
+        await self._request(
+            "POST", "/api/services/lock/lock", body={"entity_id": entity_id}
+        )
+
+    async def unlock(self, entity_id: str) -> None:
+        await self._request(
+            "POST", "/api/services/lock/unlock", body={"entity_id": entity_id}
+        )
+
     async def get_statistics(
         self, statistic_ids: list[str], start: datetime, period: str
     ) -> dict[str, list[dict]]:

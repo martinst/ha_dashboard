@@ -94,6 +94,29 @@ def build_cover_groups(cover_states: list[dict], groups: list[Group]) -> list[di
     return _build(cover_states, groups, cover_from_ha_state, missing_cover)
 
 
+def lock_from_ha_state(state: dict) -> dict:
+    attrs = state.get("attributes", {})
+    return {
+        "entity_id": state["entity_id"],
+        "name": attrs.get("friendly_name", state["entity_id"]),
+        "state": state.get("state"),
+        "available": state.get("state") not in ("unavailable", "unknown"),
+    }
+
+
+def missing_lock(entity_id: str) -> dict:
+    return {
+        "entity_id": entity_id,
+        "name": entity_id.removeprefix("lock.").replace("_", " ").title(),
+        "state": None,
+        "available": False,
+    }
+
+
+def build_lock_groups(lock_states: list[dict], groups: list[Group]) -> list[dict]:
+    return _build(lock_states, groups, lock_from_ha_state, missing_lock)
+
+
 # ---- temperature sensors (e.g. an Ecowitt weather console) ----
 
 OUTDOOR_SUFFIX = "_outdoor_temperature"

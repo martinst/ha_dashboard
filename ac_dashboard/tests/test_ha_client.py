@@ -214,3 +214,19 @@ def test_ws_url_derived_from_base_url():
     assert HAClient("https://ha.example:8123", "t").ws_url == "wss://ha.example:8123/api/websocket"
     # The Supervisor proxies the core websocket at a different path
     assert HAClient("http://supervisor/core", "t", ws_url="ws://supervisor/core/websocket").ws_url == "ws://supervisor/core/websocket"
+
+
+async def test_lock_and_unlock_post_service_calls():
+    calls = []
+
+    def handler(request):
+        calls.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json=[])
+
+    client = make_ha_client(handler)
+    await client.lock("lock.door")
+    await client.unlock("lock.door")
+    assert calls == [
+        ("/api/services/lock/lock", {"entity_id": "lock.door"}),
+        ("/api/services/lock/unlock", {"entity_id": "lock.door"}),
+    ]

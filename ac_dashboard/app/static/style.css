@@ -404,3 +404,43 @@ body.sheet-open { overflow: hidden; }
   stroke-linecap: round;
 }
 .chart-svg .mean-dot { fill: var(--accent-cool); }
+
+/* ---- doors page ---- */
+
+.user-line {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.user-line a { color: var(--accent-cool); }
+
+.lock-state { color: var(--muted); font-weight: 600; }
+.card[data-state="locked"] { border-left-color: var(--accent-auto); }
+.card[data-state="unlocked"],
+.card[data-state="open"] { border-left-color: var(--accent-heat); }
+.card[data-state="locking"],
+.card[data-state="unlocking"],
+.card[data-state="opening"] { border-left-color: var(--accent-cool); }
+.card[data-state="jammed"] { border-left-color: #e74c3c; }
+
+.lock-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.lock-btns .lock-btn {
+  flex: 1;
+  padding: 12px 0;
+  font-weight: 600;
+}
+.lock-btn.confirm {
+  background: var(--accent-heat);
+  color: #fff;
+}
+.lock-hint {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}

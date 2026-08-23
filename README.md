@@ -1,7 +1,7 @@
 # Home Dashboard — Home Assistant App
 
 Simple web pages for controlling AC units (climate entities) and motorized
-windows (cover entities, e.g. Somfy TaHoma) configured in Home Assistant.
+windows (cover entities, e.g. Somfy TaHoma) and doors (lock entities, e.g. Inner Range Inception — behind Google sign-in) configured in Home Assistant.
 Stripped-down controls with big touch targets, no HA login — made for family
 use on phones, reachable over your LAN or VPN (e.g. the Tailscale app).
 

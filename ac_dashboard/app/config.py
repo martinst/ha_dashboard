@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     schedules_path: str = "schedules.json"
     outdoor_sensor: str = ""
     indoor_sensor: str = ""
+    # Google sign-in for the Doors page (empty client id = page disabled)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    allowed_emails: str = ""  # comma-separated
+    session_secret_path: str = "session_secret"
+    session_days: int = 365
 
     def sensor_config(self) -> SensorConfig:
         return SensorConfig(

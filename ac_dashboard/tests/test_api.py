@@ -521,3 +521,203 @@ def test_history_endpoint_502_when_statistics_fail(make_client):
     fake = FakeHAClient(states=temp_sensors(), fail_statistics=True)
     resp = make_client(fake).get("/api/temperatures/outdoor/history")
     assert resp.status_code == 502
+
+
+# ---- Google login, sessions, Doors page -----------------------------------
+
+from urllib.parse import parse_qs, urlparse
+
+from tests.conftest import fake_google, lock_ha_state, make_auth
+
+LOCKS = [
+    lock_ha_state("lock.front_door", state="locked"),
+    lock_ha_state("lock.garage", state="unlocked"),
+]
+DOOR_GROUPS = [Group(name="Street", entities=["lock.front_door", "lock.garage"])]
+
+
+def login(client, state_from_location=True):
+    """Run the OAuth dance against the fake Google; leaves a session cookie."""
+    resp = client.get("/auth/login?next=/doors.html", follow_redirects=False)
+    assert resp.status_code == 302
+    state = parse_qs(urlparse(resp.headers["location"]).query)["state"][0]
+    return client.get(f"/auth/callback?code=c1&state={state}", follow_redirects=False)
+
+
+def test_login_redirects_to_google_and_sets_state_cookie(make_client, tmp_path):
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path))
+    resp = client.get("/auth/login?next=/doors.html", follow_redirects=False)
+    assert resp.status_code == 302
+    loc = resp.headers["location"]
+    assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+    q = parse_qs(urlparse(loc).query)
+    assert q["redirect_uri"] == ["http://testserver/auth/callback"]
+    assert "oauth_state" in resp.cookies
+    assert "session" not in resp.cookies
+
+
+def test_callback_with_allowed_email_sets_session_and_redirects_to_next(make_client, tmp_path):
+    transport, _ = fake_google(email="martin@example.com")
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    resp = login(client)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/doors.html"
+    assert "session" in resp.cookies
+    cookie_header = resp.headers["set-cookie"]
+    assert "HttpOnly" in cookie_header
+    assert "SameSite=lax" in cookie_header.lower().replace("samesite=lax", "SameSite=lax")
+    assert "Max-Age=31536000" in cookie_header  # a year: stay logged in
+    assert client.get("/auth/me").json() == {"email": "martin@example.com"}
+
+
+def test_callback_with_unlisted_email_is_403_and_no_session(make_client, tmp_path):
+    transport, _ = fake_google(email="mallory@example.com")
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    resp = login(client)
+    assert resp.status_code == 403
+    assert "mallory@example.com" in resp.text
+    assert "session" not in resp.cookies
+    assert client.get("/auth/me").status_code == 401
+
+
+def test_callback_with_wrong_state_is_400(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    client.get("/auth/login", follow_redirects=False)
+    resp = client.get("/auth/callback?code=c1&state=forged", follow_redirects=False)
+    assert resp.status_code == 400
+    assert "session" not in resp.cookies
+
+
+def test_callback_without_state_cookie_is_400(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    resp = client.get("/auth/callback?code=c1&state=x", follow_redirects=False)
+    assert resp.status_code == 400
+
+
+def test_callback_google_error_is_502(make_client, tmp_path):
+    transport, _ = fake_google(token_status=400)
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    resp = login(client)
+    assert resp.status_code == 502
+
+
+def test_logout_clears_session(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    login(client)
+    resp = client.get("/auth/logout", follow_redirects=False)
+    assert resp.status_code == 302
+    assert client.get("/auth/me").status_code == 401
+
+
+def test_doors_page_redirects_to_login_when_logged_out(make_client, tmp_path):
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path))
+    resp = client.get("/doors.html", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/auth/login?next=%2Fdoors.html"
+
+
+def test_doors_page_served_when_logged_in(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    login(client)
+    resp = client.get("/doors.html")
+    assert resp.status_code == 200
+    assert "doors.js" in resp.text
+    assert resp.headers["cache-control"] == "no-cache"
+
+
+def test_doors_page_is_503_when_google_login_not_configured(make_client):
+    client = make_client(FakeHAClient(), auth=None)
+    resp = client.get("/doors.html")
+    assert resp.status_code == 503
+    assert "google_client_id" in resp.text
+
+
+def test_login_is_503_when_not_configured(make_client):
+    resp = make_client(FakeHAClient(), auth=None).get("/auth/login", follow_redirects=False)
+    assert resp.status_code == 503
+
+
+def test_doors_api_requires_session(make_client, tmp_path):
+    client = make_client(FakeHAClient(states=LOCKS), auth=make_auth(tmp_path))
+    assert client.get("/api/doors").status_code == 401
+    assert client.post("/api/doors/lock.front_door/set", json={"action": "lock"}).status_code == 401
+    assert client.post("/api/door-groups/Street/set", json={"action": "lock"}).status_code == 401
+
+
+def test_doors_state_for_logged_in_user(make_client, tmp_path):
+    transport, _ = fake_google(email="maria@example.com")
+    fake = FakeHAClient(states=LOCKS + [ha_state("climate.bedroom")])
+    client = make_client(fake, door_groups=DOOR_GROUPS, auth=make_auth(tmp_path, transport))
+    login(client)
+    body = client.get("/api/doors").json()
+    assert body["user"] == "maria@example.com"
+    assert body["groups"][0]["name"] == "Street"
+    assert body["groups"][0]["units"] == [
+        {"entity_id": "lock.front_door", "name": "Front Door", "state": "locked", "available": True},
+        {"entity_id": "lock.garage", "name": "Garage", "state": "unlocked", "available": True},
+    ]
+
+
+def test_lock_and_unlock_door(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(states=LOCKS)
+    client = make_client(fake, auth=make_auth(tmp_path, transport))
+    login(client)
+    assert client.post("/api/doors/lock.front_door/set", json={"action": "unlock"}).status_code == 200
+    assert client.post("/api/doors/lock.front_door/set", json={"action": "lock"}).status_code == 200
+    assert fake.calls == [("unlock", "lock.front_door"), ("lock", "lock.front_door")]
+
+
+def test_door_command_rejects_bad_action_and_wrong_domain(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    login(client)
+    assert client.post("/api/doors/lock.front_door/set", json={"action": "open"}).status_code == 422
+    assert client.post("/api/doors/cover.win/set", json={"action": "lock"}).status_code == 400
+
+
+def test_door_group_lock_all(make_client, tmp_path):
+    transport, _ = fake_google()
+    fake = FakeHAClient(fail_entities=["lock.garage"])
+    client = make_client(fake, door_groups=DOOR_GROUPS, auth=make_auth(tmp_path, transport))
+    login(client)
+    resp = client.post("/api/door-groups/Street/set", json={"action": "lock"})
+    assert resp.json() == {"total": 2, "succeeded": 1, "failed": ["lock.garage"]}
+
+
+def test_door_group_unlock_all_is_refused(make_client, tmp_path):
+    # Unlocking every door in one tap is a footgun; groups only lock.
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), door_groups=DOOR_GROUPS, auth=make_auth(tmp_path, transport))
+    login(client)
+    resp = client.post("/api/door-groups/Street/set", json={"action": "unlock"})
+    assert resp.status_code == 400
+
+
+def test_session_survives_restart_with_persisted_secret(make_client, tmp_path):
+    transport, _ = fake_google()
+    client = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    login(client)
+    cookie = client.cookies["session"]
+    # "Restart": a new Auth built from the same secret file must accept the cookie
+    client2 = make_client(FakeHAClient(), auth=make_auth(tmp_path, transport))
+    client2.cookies.set("session", cookie)
+    assert client2.get("/auth/me").json() == {"email": "martin@example.com"}
+
+
+def test_static_asset_links_include_doors_page():
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).parent.parent
+    version = yaml.safe_load((root / "config.yaml").read_text())["version"]
+    html = (root / "app" / "static" / "doors.html").read_text()
+    for asset in ("/style.css", "/shared.js", "/doors.js"):
+        assert f'"{asset}?v={version}"' in html, asset
+    for page in ("index.html", "windows.html", "doors.html"):
+        assert 'href="/doors.html"' in (root / "app" / "static" / page).read_text(), page

@@ -66,3 +66,23 @@ async def test_cover_command_on_climate_entity_raises():
 async def test_unknown_domain_raises():
     with pytest.raises(CommandError):
         await apply_command(FakeHAClient(), "light.kitchen", SetCommand(mode="off"))
+
+
+from app.commands import LockCommand
+
+
+def test_lock_command_validates_action():
+    with pytest.raises(ValidationError, match="lock or unlock"):
+        LockCommand(action="open")
+
+
+async def test_lock_command_calls_lock_and_unlock():
+    fake = FakeHAClient()
+    await apply_command(fake, "lock.door", LockCommand(action="lock"))
+    await apply_command(fake, "lock.door", LockCommand(action="unlock"))
+    assert fake.calls == [("lock", "lock.door"), ("unlock", "lock.door")]
+
+
+async def test_lock_command_on_non_lock_entity_is_error():
+    with pytest.raises(CommandError):
+        await apply_command(FakeHAClient(), "climate.x", LockCommand(action="lock"))

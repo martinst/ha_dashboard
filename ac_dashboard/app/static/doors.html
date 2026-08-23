@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#2e86de">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>Home Dashboard — AC</title>
+  <title>Home Dashboard — Doors</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="/icon-192.png">
@@ -15,20 +15,16 @@
 <body>
   <header>
     <nav class="pages">
-      <a href="/" class="page-link active">AC</a>
+      <a href="/" class="page-link">AC</a>
       <a href="/windows.html" class="page-link">Windows</a>
-      <a href="/doors.html" class="page-link">Doors</a>
+      <a href="/doors.html" class="page-link active">Doors</a>
     </nav>
     <span id="status-dot" class="dot" title="Connection to Home Assistant"></span>
   </header>
   <section id="temps" class="temps hidden"></section>
-  <nav class="tabs">
-    <button id="tab-control" class="tab active">Control</button>
-    <button id="tab-schedule" class="tab">Schedule</button>
-  </nav>
   <div id="banner" class="banner hidden">Can't reach Home Assistant</div>
+  <p id="user-line" class="user-line"></p>
   <main id="groups"></main>
-  <main id="schedule" class="hidden"></main>
   <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
     <div class="sheet-backdrop"></div>
     <div class="sheet-panel">
@@ -42,6 +38,6 @@
     </div>
   </div>
   <script src="/shared.js?v=1.7.0"></script>
-  <script src="/app.js?v=1.7.0"></script>
+  <script src="/doors.js?v=1.7.0"></script>
 </body>
 </html>

@@ -204,3 +204,34 @@ def test_configured_sensor_missing_from_ha_shows_as_unavailable():
         "unit": None,
         "available": False,
     }
+
+
+from app.state import build_lock_groups
+
+from tests.conftest import lock_ha_state
+
+
+def test_lock_fields_mapped_from_ha_state():
+    states = [lock_ha_state("lock.front_door", state="unlocking")]
+    result = build_lock_groups(states, [Group(name="G", entities=["lock.front_door"])])
+    assert result[0]["units"][0] == {
+        "entity_id": "lock.front_door",
+        "name": "Front Door",
+        "state": "unlocking",
+        "available": True,
+    }
+
+
+def test_unavailable_and_missing_locks():
+    states = [lock_ha_state("lock.a", state="unavailable")]
+    result = build_lock_groups(states, [Group(name="G", entities=["lock.a", "lock.gone"])])
+    a, gone = result[0]["units"]
+    assert a["available"] is False
+    assert gone == {"entity_id": "lock.gone", "name": "Gone", "state": None, "available": False}
+
+
+def test_unlisted_locks_land_in_ungrouped():
+    states = [lock_ha_state("lock.zeta"), lock_ha_state("lock.alpha")]
+    result = build_lock_groups(states, [])
+    assert [g["name"] for g in result] == ["Ungrouped"]
+    assert [u["name"] for u in result[0]["units"]] == ["Alpha", "Zeta"]

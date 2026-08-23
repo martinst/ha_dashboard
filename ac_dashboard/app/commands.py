@@ -33,8 +33,18 @@ class CoverCommand(BaseModel):
         return self
 
 
+class LockCommand(BaseModel):
+    action: str
+
+    @model_validator(mode="after")
+    def validate_command(self):
+        if self.action not in ("lock", "unlock"):
+            raise ValueError(f"action must be lock or unlock, got {self.action!r}")
+        return self
+
+
 async def apply_command(
-    ha: HAClient, entity_id: str, cmd: SetCommand | CoverCommand
+    ha: HAClient, entity_id: str, cmd: SetCommand | CoverCommand | LockCommand
 ) -> None:
     if entity_id.startswith("climate."):
         if not isinstance(cmd, SetCommand):
@@ -56,5 +66,12 @@ async def apply_command(
             await ha.open_cover(entity_id)
         else:
             await ha.close_cover(entity_id)
+    elif entity_id.startswith("lock."):
+        if not isinstance(cmd, LockCommand):
+            raise CommandError(f"{entity_id} requires a lock command")
+        if cmd.action == "lock":
+            await ha.lock(entity_id)
+        else:
+            await ha.unlock(entity_id)
     else:
         raise CommandError(f"unsupported entity domain: {entity_id}")

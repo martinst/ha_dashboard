@@ -7,10 +7,30 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, model_validator
-from fastapi.responses import JSONResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
-from app.commands import CommandError, CoverCommand, SetCommand, apply_command
+from app.auth import (
+    SESSION_COOKIE,
+    STATE_COOKIE,
+    STATE_MAX_AGE,
+    Auth,
+    SessionSigner,
+    load_or_create_secret,
+    safe_next_path,
+)
+from app.commands import (
+    CommandError,
+    CoverCommand,
+    LockCommand,
+    SetCommand,
+    apply_command,
+)
 from app.config import (
     SensorConfig,
     Settings,
@@ -21,7 +41,12 @@ from app.config import (
 from app.ha_client import HAClient, HAError
 from app.history import RANGES, build_history
 from app.scheduler import Scheduler, fetch_timezone
-from app.state import build_cover_groups, build_groups, build_temperatures
+from app.state import (
+    build_cover_groups,
+    build_groups,
+    build_lock_groups,
+    build_temperatures,
+)
 
 
 @asynccontextmanager
@@ -33,7 +58,17 @@ async def lifespan(app: FastAPI):
     app.state.history_cache = {}
     app.state.groups = load_groups()
     app.state.cover_groups = load_groups("window_groups.yaml")
+    app.state.door_groups = load_groups("door_groups.yaml")
     app.state.sensor_config = settings.sensor_config()
+    app.state.auth = None
+    if settings.google_client_id:
+        app.state.auth = Auth(
+            settings.google_client_id,
+            settings.google_client_secret,
+            settings.allowed_emails.split(","),
+            SessionSigner(load_or_create_secret(settings.session_secret_path)),
+            session_days=settings.session_days,
+        )
     tz = await fetch_timezone(app.state.ha_client)
     app.state.scheduler = Scheduler(
         load_presets() + load_cover_presets(),
@@ -45,9 +80,12 @@ async def lifespan(app: FastAPI):
     yield
     await app.state.scheduler.stop()
     await app.state.ha_client.aclose()
+    if app.state.auth:
+        await app.state.auth.aclose()
 
 
 app = FastAPI(lifespan=lifespan)
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 def get_ha_client(request: Request) -> HAClient:
@@ -60,6 +98,26 @@ def get_groups(request: Request) -> list:
 
 def get_cover_groups(request: Request) -> list:
     return request.app.state.cover_groups
+
+
+def get_door_groups(request: Request) -> list:
+    return request.app.state.door_groups
+
+
+def get_auth(request: Request) -> Auth | None:
+    return request.app.state.auth
+
+
+def current_user(request: Request, auth: Auth | None = Depends(get_auth)) -> str | None:
+    if auth is None:
+        return None
+    return auth.session_email(request.cookies.get(SESSION_COOKIE))
+
+
+def require_user(user: str | None = Depends(current_user)) -> str:
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    return user
 
 
 def get_sensor_config(request: Request) -> SensorConfig:
@@ -269,6 +327,135 @@ async def cancel_preset(
     return {"ok": True}
 
 
+# ---- Google sign-in -------------------------------------------------------
+
+NOT_CONFIGURED_HTML = """<!doctype html><meta charset="utf-8">
+<title>Doors — not configured</title>
+<body style="font-family:-apple-system,sans-serif;padding:24px;max-width:560px">
+<h2>Doors page is not configured</h2>
+<p>Set <code>google_client_id</code>, <code>google_client_secret</code> and
+<code>allowed_emails</code> in the add-on configuration and restart.</p>
+<p><a href="/">Back</a></p></body>"""
+
+
+def _secure(request: Request) -> bool:
+    return request.url.scheme == "https"
+
+
+def _callback_uri(request: Request) -> str:
+    return str(request.url_for("auth_callback"))
+
+
+@app.get("/auth/login")
+async def auth_login(request: Request, next: str | None = None,
+                     auth: Auth | None = Depends(get_auth)):
+    if auth is None:
+        return HTMLResponse(NOT_CONFIGURED_HTML, status_code=503)
+    state = auth.new_state()
+    resp = RedirectResponse(auth.auth_url(_callback_uri(request), state), status_code=302)
+    resp.set_cookie(
+        STATE_COOKIE, auth.state_token(state, safe_next_path(next)),
+        max_age=STATE_MAX_AGE, httponly=True, samesite="lax", secure=_secure(request),
+    )
+    return resp
+
+
+@app.get("/auth/callback", name="auth_callback")
+async def auth_callback(request: Request, code: str | None = None,
+                        state: str | None = None, error: str | None = None,
+                        auth: Auth | None = Depends(get_auth)):
+    if auth is None:
+        return HTMLResponse(NOT_CONFIGURED_HTML, status_code=503)
+    if error:
+        raise HTTPException(status_code=400, detail=f"Google sign-in error: {error}")
+    expected = auth.signer.verify(request.cookies.get(STATE_COOKIE))
+    if not code or not state or not expected or expected.get("state") != state:
+        raise HTTPException(status_code=400, detail="Sign-in state mismatch; try again")
+    try:
+        email = await auth.fetch_email(code, _callback_uri(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    if not auth.is_allowed(email):
+        body = f"""<!doctype html><meta charset="utf-8"><title>Not allowed</title>
+<body style="font-family:-apple-system,sans-serif;padding:24px;max-width:560px">
+<h2>Not allowed</h2><p><b>{email}</b> is not on the list of allowed accounts.</p>
+<p><a href="/auth/login?next={expected.get('next', '/')}">Try another account</a>
+ · <a href="/">Back</a></p></body>"""
+        resp = HTMLResponse(body, status_code=403)
+        resp.delete_cookie(STATE_COOKIE)
+        return resp
+    resp = RedirectResponse(safe_next_path(expected.get("next")), status_code=302)
+    resp.set_cookie(
+        SESSION_COOKIE, auth.session_token(email),
+        max_age=auth.session_max_age, httponly=True, samesite="lax",
+        secure=_secure(request),
+    )
+    resp.delete_cookie(STATE_COOKIE)
+    return resp
+
+
+@app.get("/auth/logout")
+async def auth_logout():
+    resp = RedirectResponse("/", status_code=302)
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
+
+
+@app.get("/auth/me")
+async def auth_me(user: str = Depends(require_user)):
+    return {"email": user}
+
+
+@app.get("/doors.html")
+async def doors_page(request: Request, auth: Auth | None = Depends(get_auth),
+                     user: str | None = Depends(current_user)):
+    if auth is None:
+        return HTMLResponse(NOT_CONFIGURED_HTML, status_code=503)
+    if user is None:
+        return RedirectResponse("/auth/login?next=%2Fdoors.html", status_code=302)
+    return FileResponse(STATIC_DIR / "doors.html", headers={"Cache-Control": "no-cache"})
+
+
+# ---- Doors (locks) — every endpoint needs a signed-in user ----------------
+
+@app.get("/api/doors")
+async def get_doors(
+    user: str = Depends(require_user),
+    ha: HAClient = Depends(get_ha_client),
+    groups: list = Depends(get_door_groups),
+):
+    states = await ha.get_states()
+    locks = [s for s in states if s["entity_id"].startswith("lock.")]
+    return {"user": user, "groups": build_lock_groups(locks, groups)}
+
+
+@app.post("/api/doors/{entity_id}/set")
+async def set_door(
+    entity_id: str,
+    cmd: LockCommand,
+    user: str = Depends(require_user),
+    ha: HAClient = Depends(get_ha_client),
+):
+    await apply_command(ha, entity_id, cmd)
+    return {"ok": True}
+
+
+@app.post("/api/door-groups/{name}/set")
+async def set_door_group(
+    name: str,
+    cmd: LockCommand,
+    user: str = Depends(require_user),
+    ha: HAClient = Depends(get_ha_client),
+    groups: list = Depends(get_door_groups),
+):
+    if cmd.action != "lock":
+        raise HTTPException(status_code=400, detail="Door groups can only be locked")
+    group = next((g for g in groups if g.name == name), None)
+    if group is None:
+        raise HTTPException(status_code=404, detail=f"Unknown group: {name}")
+    return await _fan_out(ha, group.entities, cmd)
+
+
 class NoCacheStaticFiles(StaticFiles):
     """Static files with forced revalidation.
 
@@ -282,5 +469,4 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 
-STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/", NoCacheStaticFiles(directory=STATIC_DIR, html=True), name="static")

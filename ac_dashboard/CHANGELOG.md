@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+- New **Doors** page: lock / unlock `lock.*` entities (e.g. Inner Range
+  Inception doors via the inception-mqtt add-on), with `door_groups` and a
+  "Lock all" per group. Unlock needs a second confirming tap.
+- The Doors page is behind **Google sign-in**: only the accounts listed in
+  `allowed_emails` get in (`google_client_id` / `google_client_secret`
+  options). Sign-in is remembered for a year, across restarts and updates.
+- AC and Windows pages are unchanged and still need no sign-in.
+
 ## 1.6.0
 
 - Tap the Outdoor / Indoor tile to open a temperature history chart with a

@@ -46,6 +46,57 @@ window_groups:
 Any cover entity not listed still appears under "Ungrouped" on the Windows
 page.
 
+## Doors (with Google sign-in)
+
+The **Doors** page controls `lock.*` entities — for example doors and gates
+from an Inner Range Inception system exposed through the *inception-mqtt*
+add-on. Each card shows the lock state and has **Lock** and **Unlock**
+buttons (Unlock asks for a second tap; with inception-mqtt it triggers the
+door's timed "Open", after which the door re-locks itself). Optional groups
+get a **Lock all** button — groups deliberately cannot unlock everything at
+once.
+
+```yaml
+door_groups:
+  - name: Street
+    entities:
+      - lock.front_gate
+      - lock.driveway_gates
+```
+
+Because this page can open your doors, it is protected by **Google
+sign-in**, and only the Google accounts you list are accepted. People stay
+signed in for a year on each device, so the Google prompt appears once.
+Setting it up takes a few minutes in the Google Cloud console:
+
+1. Go to <https://console.cloud.google.com/>, create a project (any name).
+2. **APIs & Services → OAuth consent screen**: choose *External*, fill in the
+   app name and your email. Under **Test users** add every email you intend
+   to allow (or *Publish* the app — it only asks for the basic email scope,
+   so no Google verification is needed).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
+   type *Web application*. Under **Authorized redirect URIs** add
+   `https://<your-host>:8088/auth/callback` — the exact address your family
+   uses to open the dashboard, e.g.
+   `https://myhome.duckdns.org:8088/auth/callback`. Google requires HTTPS
+   and a real hostname here (no IP addresses, no `.local` names), so set up
+   the HTTPS section below first.
+4. Copy the client ID and client secret into the add-on configuration:
+
+```yaml
+google_client_id: 1234567890-abc.apps.googleusercontent.com
+google_client_secret: GOCSPX-...
+allowed_emails:
+  - you@gmail.com
+  - partner@gmail.com
+```
+
+5. Restart the add-on. Opening **Doors** now goes through Google once per
+   device; **Sign out** is at the top of the page.
+
+Until `google_client_id` is set, the Doors page shows a "not configured"
+notice. The AC and Windows pages never require sign-in.
+
 ## Outdoor / indoor temperature
 
 Both pages show an **Outdoor** and **Indoor** temperature tile at the top. By
@@ -146,6 +197,11 @@ standalone like an app (icon and manifest are built in).
 
 ## Security
 
-The dashboard has **no authentication** — anyone who can reach port 8088 can
-control your AC units and windows. Keep it on your LAN/VPN (e.g. the Tailscale app).
-Do **not** port-forward it to the internet.
+The AC and Windows pages have **no authentication** — anyone who can reach
+port 8088 can control your AC units and windows. Keep it on your LAN/VPN
+(e.g. the Tailscale app). Do **not** port-forward it to the internet.
+
+The Doors page additionally requires Google sign-in from an allowed account.
+The sign-in cookie is HttpOnly and signed with a key stored in the add-on's
+data folder; signing out on a device or removing an address from
+`allowed_emails` takes effect on that device's next request.

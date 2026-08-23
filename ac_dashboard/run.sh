@@ -42,7 +42,21 @@ with open("window_groups.yaml", "w") as f:
     yaml.safe_dump({"groups": options.get("window_groups", [])}, f)
 with open("window_presets.yaml", "w") as f:
     yaml.safe_dump({"presets": fix_times(options.get("window_presets", []))}, f)
+with open("door_groups.yaml", "w") as f:
+    yaml.safe_dump({"groups": options.get("door_groups", [])}, f)
 PY
+
+# Google sign-in for the Doors page (session key persists in /data so
+# people stay signed in across restarts and updates).
+export SESSION_SECRET_PATH=/data/session_secret
+eval "$(python3 - <<'PYENV'
+import json, shlex
+o = json.load(open("/data/options.json"))
+print("export GOOGLE_CLIENT_ID=" + shlex.quote(o.get("google_client_id") or ""))
+print("export GOOGLE_CLIENT_SECRET=" + shlex.quote(o.get("google_client_secret") or ""))
+print("export ALLOWED_EMAILS=" + shlex.quote(",".join(o.get("allowed_emails") or [])))
+PYENV
+)"
 
 SSL_ARGS=""
 if bashio::config.true 'ssl'; then
