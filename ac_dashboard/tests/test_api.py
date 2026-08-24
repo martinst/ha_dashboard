@@ -836,3 +836,11 @@ def test_doors_respect_configured_order(make_client, tmp_path):
     login(client)
     units = client.get("/api/doors").json()["groups"][0]["units"]
     assert [u["entity_id"] for u in units] == ["lock.garage", "lock.front_door"]
+
+
+def test_all_pages_have_theme_toggle_button():
+    from pathlib import Path
+
+    root = Path(__file__).parent.parent / "app" / "static"
+    for page in ("index.html", "windows.html", "doors.html"):
+        assert 'id="theme-btn"' in (root / page).read_text(), page

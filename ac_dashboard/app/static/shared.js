@@ -16,6 +16,33 @@ let scheduleState = { presets: [] };
 const armForm = {};         // preset id -> form state (survives re-renders)
 const pendingSchedule = {}; // preset id -> suppress-poll-until timestamp
 
+// ---- theme (Auto follows the phone; Light/Dark override, per device) ----
+
+const THEMES = ["auto", "light", "dark"];
+const THEME_LABELS = { auto: "Auto", light: "Light", dark: "Dark" };
+
+function storedTheme() {
+  try {
+    const t = localStorage.getItem("theme");
+    return THEMES.includes(t) ? t : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function applyTheme(theme) {
+  if (theme === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  document.getElementById("theme-btn").textContent = THEME_LABELS[theme];
+}
+
+document.getElementById("theme-btn").addEventListener("click", () => {
+  const next = THEMES[(THEMES.indexOf(storedTheme()) + 1) % THEMES.length];
+  try { localStorage.setItem("theme", next); } catch { /* private mode */ }
+  applyTheme(next);
+});
+applyTheme(storedTheme());
+
 // ---- connection + fetch ----
 
 function setConnected(ok) {

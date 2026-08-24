@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.12.0
+
+- Theme toggle in the header: Auto (follow the phone) / Light / Dark,
+  remembered per device
+
 ## 1.11.0
 
 - New "Quiet Premium" visual design across all pages: warmer neutrals,
