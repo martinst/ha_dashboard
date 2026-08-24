@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0
+
+- New "Quiet Premium" visual design across all pages: warmer neutrals,
+  segmented controls, refined state colors (oklch), sticky translucent
+  header, restyled bottom sheet and chart — plus **dark mode** following
+  the phone's setting
+
 ## 1.10.1
 
 - Doors: plain-text Lock / Open / Unlock buttons (emojis removed)

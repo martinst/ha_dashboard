@@ -1,5 +1,5 @@
 name: Home Dashboard
-version: "1.10.1"
+version: "1.11.0"
 slug: ac_dashboard
 description: Simple web pages for AC units, motorized windows, doors (Google sign-in) and outdoor/indoor temperature
 url: https://github.com/martinst/ha_dashboard
