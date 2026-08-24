@@ -160,18 +160,18 @@ function renderDoor(door) {
   card.append(top);
 
   const buttons = el("div", "lock-btns");
-  const lockBtn = btn("🔒 Lock", "lock-btn", () => lockDoor(door));
+  const lockBtn = btn("Lock", "lock-btn", () => lockDoor(door));
   lockBtn.disabled = !door.available;
   buttons.append(lockBtn);
   if (door.supports_open) {
     const openArmed = armed(door, "open");
-    const openBtn = btn(openArmed ? "Tap again to open" : "🚪 Open", "lock-btn open", () => openDoor(door));
+    const openBtn = btn(openArmed ? "Tap again to open" : "Open", "lock-btn open", () => openDoor(door));
     if (openArmed) openBtn.classList.add("confirm");
     openBtn.disabled = !door.available;
     buttons.append(openBtn);
   }
   const unlockArmed = armed(door, "unlock");
-  const unlockBtn = btn(unlockArmed ? "Tap again to unlock" : "🔓 Unlock", "lock-btn unlock", () => unlockDoor(door));
+  const unlockBtn = btn(unlockArmed ? "Tap again to unlock" : "Unlock", "lock-btn unlock", () => unlockDoor(door));
   if (unlockArmed) unlockBtn.classList.add("confirm");
   unlockBtn.disabled = !door.available;
   buttons.append(unlockBtn);

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.1
+
+- Doors: plain-text Lock / Open / Unlock buttons (emojis removed)
+
 ## 1.10.0
 
 - Doors: `door_order` option — list entity ids in the order they should
