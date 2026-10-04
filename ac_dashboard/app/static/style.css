@@ -148,10 +148,15 @@ header {
 /* 5 ─ Temperature tiles ---------------------------------------------------- */
 .temps {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 10px;
   margin: 8px 0 14px;
 }
+/* three tiles (Outdoor / Indoor / Pool) still fit one row on a phone */
+.temps:has(> :nth-child(3)) { gap: 8px; }
+.temps:has(> :nth-child(3)) .temp-tile { padding: 11px 12px 10px; }
+.temps:has(> :nth-child(3)) .temp-value { font-size: 23px; }
 .temp-tile {
   background: var(--card);
   border: 1px solid var(--line);
@@ -181,6 +186,7 @@ header {
 }
 .temp-tile.outdoor .temp-label::before { background: var(--accent-cool); }
 .temp-tile.indoor .temp-label::before { background: var(--accent-heat); }
+.temp-tile.pool .temp-label::before { background: var(--accent-dry); }
 .temp-value {
   margin-top: 3px;
   font-size: 27px;

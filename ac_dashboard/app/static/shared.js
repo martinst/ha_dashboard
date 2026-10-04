@@ -90,13 +90,14 @@ function debounce(key, fn) {
   timers[key] = setTimeout(fn, DEBOUNCE_MS);
 }
 
-// ---- outdoor / indoor temperature strip ----
+// ---- outdoor / indoor / pool temperature strip ----
 
-// `temps` is the /api/state "temperatures" object: {outdoor, indoor}, each a
-// sensor ({temp, unit, available}) or null when no sensor is configured/found.
+// `temps` is the /api/state "temperatures" object: {outdoor, indoor, pool},
+// each a sensor ({temp, unit, available}) or null when no sensor is
+// configured/found.
 function renderTemperatures(temps) {
   const strip = document.getElementById("temps");
-  const slots = [["outdoor", "Outdoor"], ["indoor", "Indoor"]]
+  const slots = [["outdoor", "Outdoor"], ["indoor", "Indoor"], ["pool", "Pool"]]
     .filter(([key]) => temps && temps[key]);
   strip.classList.toggle("hidden", !slots.length);
   strip.replaceChildren(

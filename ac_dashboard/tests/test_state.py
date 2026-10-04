@@ -168,7 +168,9 @@ def test_auto_detect_ignores_non_temperature_sensors():
     states = [
         sensor_ha_state("sensor.gw_outdoor_temperature", device_class="humidity"),
     ]
-    assert build_temperatures(states, None, None) == {"outdoor": None, "indoor": None}
+    assert build_temperatures(states, None, None) == {
+        "outdoor": None, "indoor": None, "pool": None
+    }
 
 
 def test_configured_sensor_wins_over_auto_detect():
@@ -204,6 +206,24 @@ def test_configured_sensor_missing_from_ha_shows_as_unavailable():
         "unit": None,
         "available": False,
     }
+
+
+def test_pool_sensor_is_configured_only_never_auto_detected():
+    states = [
+        sensor_ha_state("sensor.wn1980c_outdoor_temperature", state="11.9"),
+        sensor_ha_state("sensor.wn1980c_temperature_3", state="25.3"),
+    ]
+    assert build_temperatures(states, None, None)["pool"] is None
+    result = build_temperatures(states, None, None, pool="sensor.wn1980c_temperature_3")
+    assert result["pool"]["entity_id"] == "sensor.wn1980c_temperature_3"
+    assert result["pool"]["temp"] == 25.3
+    assert result["pool"]["available"] is True
+
+
+def test_configured_pool_sensor_missing_from_ha_shows_as_unavailable():
+    result = build_temperatures([], None, None, pool="sensor.pool")
+    assert result["pool"]["entity_id"] == "sensor.pool"
+    assert result["pool"]["available"] is False
 
 
 from app.state import build_lock_groups

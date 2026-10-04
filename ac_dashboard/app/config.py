@@ -17,11 +17,13 @@ class Group(BaseModel):
 class SensorConfig(BaseModel):
     """Temperature sensors shown at the top of every page.
 
-    Empty means auto-detect (Ecowitt-style *_outdoor_temperature /
-    *_indoor_temperature sensors)."""
+    Empty outdoor/indoor means auto-detect (Ecowitt-style
+    *_outdoor_temperature / *_indoor_temperature sensors). The pool
+    thermometer is never auto-detected: empty means no Pool tile."""
 
     outdoor: str | None = None
     indoor: str | None = None
+    pool: str | None = None
 
 
 class Settings(BaseSettings):
@@ -33,6 +35,7 @@ class Settings(BaseSettings):
     schedules_path: str = "schedules.json"
     outdoor_sensor: str = ""
     indoor_sensor: str = ""
+    pool_sensor: str = ""
     # Google sign-in for the Doors page (empty client id = page disabled)
     google_client_id: str = ""
     google_client_secret: str = ""
@@ -44,6 +47,7 @@ class Settings(BaseSettings):
         return SensorConfig(
             outdoor=self.outdoor_sensor.strip() or None,
             indoor=self.indoor_sensor.strip() or None,
+            pool=self.pool_sensor.strip() or None,
         )
 
 

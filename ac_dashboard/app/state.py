@@ -190,15 +190,21 @@ def missing_temperature(entity_id: str) -> dict:
 
 
 def build_temperatures(
-    sensor_states: list[dict], outdoor: str | None, indoor: str | None
+    sensor_states: list[dict],
+    outdoor: str | None,
+    indoor: str | None,
+    pool: str | None = None,
 ) -> dict:
+    """Slots for the temperature strip: outdoor, indoor and pool. Outdoor and
+    indoor fall back to auto-detection; pool is shown only when configured."""
     by_id = {s["entity_id"]: s for s in sensor_states}
     result = {}
     for key, configured, suffix in (
         ("outdoor", outdoor, OUTDOOR_SUFFIX),
         ("indoor", indoor, INDOOR_SUFFIX),
+        ("pool", pool, None),
     ):
-        entity_id = configured or _auto_detect(sensor_states, suffix)
+        entity_id = configured or (suffix and _auto_detect(sensor_states, suffix))
         if not entity_id:
             result[key] = None
         elif entity_id in by_id:

@@ -2,7 +2,7 @@
 
 Simple web pages for controlling your AC units (any `climate.*` entities in
 Home Assistant) and motorized windows (any `cover.*` entities, e.g. Somfy
-TaHoma via the Overkiz integration), with the outdoor and indoor temperature
+TaHoma via the Overkiz integration), with the outdoor, indoor and pool temperature
 from a weather station (e.g. Ecowitt) at the top — large touch targets, no HA
 login, made for family use on phones. Units are auto-discovered; you choose
 how to group them.
@@ -128,9 +128,9 @@ allowed_emails:
 Until `google_client_id` is set, the Doors page shows a "not configured"
 notice. The AC and Windows pages never require sign-in.
 
-## Outdoor / indoor temperature
+## Outdoor / indoor / pool temperature
 
-Both pages show an **Outdoor** and **Indoor** temperature tile at the top. By
+Every page shows an **Outdoor** and **Indoor** temperature tile at the top. By
 default the app looks for Ecowitt-style sensors — the first
 `sensor.*_outdoor_temperature` and `sensor.*_indoor_temperature` entities with
 device class *temperature* (the Ecowitt integration creates these for a
@@ -139,6 +139,14 @@ WN1980C/GW-series console). To use other sensors, set them explicitly:
 ```yaml
 outdoor_sensor: sensor.garden_probe_temperature
 indoor_sensor: sensor.hallway_temperature
+```
+
+A third **Pool** tile appears when `pool_sensor` is set — there is no
+auto-detection for it, so name the thermometer explicitly (an Ecowitt WN34
+probe shows up as one of the console's numbered channels):
+
+```yaml
+pool_sensor: sensor.wn1980c_temperature_3
 ```
 
 A tile is hidden when no sensor is configured or found, and dimmed when the

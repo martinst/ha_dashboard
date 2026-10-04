@@ -41,6 +41,16 @@ def test_settings_defaults():
     assert s.ha_token == ""
 
 
+def test_sensor_config_maps_settings_and_blanks_to_none():
+    settings = Settings(outdoor_sensor="sensor.out", indoor_sensor="  ",
+                        pool_sensor="sensor.wn1980c_temperature_3")
+    sensors = settings.sensor_config()
+    assert sensors.outdoor == "sensor.out"
+    assert sensors.indoor is None
+    assert sensors.pool == "sensor.wn1980c_temperature_3"
+    assert Settings().sensor_config().pool is None
+
+
 def test_load_presets_parses_yaml(tmp_path):
     f = tmp_path / "presets.yaml"
     f.write_text(

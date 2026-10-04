@@ -244,7 +244,7 @@ async def get_state(
         "groups": build_groups(climate, groups),
         "cover_groups": build_cover_groups(covers, cover_groups),
         "temperatures": build_temperatures(
-            sensor_states, sensors.outdoor, sensors.indoor
+            sensor_states, sensors.outdoor, sensors.indoor, sensors.pool
         ),
     }
 
@@ -260,7 +260,7 @@ async def get_temperature_history(
     sensors: SensorConfig = Depends(get_sensor_config),
     cache: dict = Depends(get_history_cache),
 ):
-    if slot not in ("outdoor", "indoor"):
+    if slot not in ("outdoor", "indoor", "pool"):
         raise HTTPException(status_code=404, detail=f"Unknown slot: {slot}")
     cached = cache.get((slot, range))
     if cached and cached[0] > time.monotonic():
@@ -268,7 +268,9 @@ async def get_temperature_history(
 
     states = await ha.get_states()
     sensor_states = [s for s in states if s["entity_id"].startswith("sensor.")]
-    sensor = build_temperatures(sensor_states, sensors.outdoor, sensors.indoor)[slot]
+    sensor = build_temperatures(
+        sensor_states, sensors.outdoor, sensors.indoor, sensors.pool
+    )[slot]
     if sensor is None:
         raise HTTPException(status_code=404, detail=f"No {slot} temperature sensor")
 
@@ -463,7 +465,9 @@ async def get_doors(
     return {
         "user": user,
         "groups": result,
-        "temperatures": build_temperatures(sensor_states, sensors.outdoor, sensors.indoor),
+        "temperatures": build_temperatures(
+            sensor_states, sensors.outdoor, sensors.indoor, sensors.pool
+        ),
     }
 
 

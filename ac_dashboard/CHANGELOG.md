@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.0
+
+- **Pool** temperature tile next to Outdoor / Indoor, with the same tap-for-
+  history chart. Set `pool_sensor` to the thermometer's entity id (no
+  auto-detection)
+
 ## 1.12.0
 
 - Theme toggle in the header: Auto (follow the phone) / Light / Dark,

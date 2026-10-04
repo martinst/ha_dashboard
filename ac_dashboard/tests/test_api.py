@@ -432,7 +432,14 @@ def test_get_state_uses_configured_sensors(make_client):
 def test_get_state_temperatures_null_when_no_sensors(make_client):
     client = make_client(FakeHAClient(states=[ha_state("climate.bedroom")]))
     body = client.get("/api/state").json()
-    assert body["temperatures"] == {"outdoor": None, "indoor": None}
+    assert body["temperatures"] == {"outdoor": None, "indoor": None, "pool": None}
+
+
+def test_get_state_includes_configured_pool_sensor(make_client):
+    fake = FakeHAClient(states=[sensor_ha_state("sensor.wn1980c_temperature_3", state="25.3")])
+    client = make_client(fake, sensors=SensorConfig(pool="sensor.wn1980c_temperature_3"))
+    body = client.get("/api/state").json()
+    assert body["temperatures"]["pool"]["temp"] == 25.3
 
 
 from datetime import timedelta
@@ -494,6 +501,25 @@ def test_history_endpoint_caches_per_slot_and_range(make_client):
     client.get("/api/temperatures/outdoor/history?range=7d")
     client.get("/api/temperatures/outdoor/history?range=30d")
     assert len(fake.statistics_calls) == 2
+
+
+def test_history_endpoint_serves_pool_slot(make_client):
+    fake = FakeHAClient(
+        states=temp_sensors() + [sensor_ha_state("sensor.wn1980c_temperature_3", state="25.3")],
+        statistics={"sensor.wn1980c_temperature_3": STAT_ROWS},
+    )
+    client = make_client(fake, sensors=SensorConfig(pool="sensor.wn1980c_temperature_3"))
+    resp = client.get("/api/temperatures/pool/history?range=7d")
+    assert resp.status_code == 200
+    assert resp.json()["entity_id"] == "sensor.wn1980c_temperature_3"
+    assert fake.statistics_calls[0][0] == ["sensor.wn1980c_temperature_3"]
+
+
+def test_history_endpoint_pool_slot_404_when_not_configured(make_client):
+    resp = make_client(FakeHAClient(states=temp_sensors())).get(
+        "/api/temperatures/pool/history"
+    )
+    assert resp.status_code == 404
 
 
 def test_history_endpoint_unknown_slot_is_404(make_client):
